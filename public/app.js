@@ -19,6 +19,9 @@ const DURACAO_FEEDBACK_COPIA_MS = 2_000;
 // Agrupa cliques rápidos no checklist num único envio à nuvem.
 const ATRASO_SALVAR_PROGRESSO_MS = 700;
 const PADRAO_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PADRAO_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Biblioteca oficial do Supabase (login), com versão fixa e carregada só quando o login existe.
+const SUPABASE_JS_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm";
 
 const CATEGORIAS = [
   { chave: "tarefas", emoji: "🔴", titulo: "Tarefas" },
@@ -66,6 +69,17 @@ const el = {
   historicoVazio: $("historico-vazio"),
   avisoHistorico: $("aviso-historico"),
   avisoArmazenamento: $("aviso-armazenamento"),
+  // Conta (login)
+  conta: $("conta"),
+  botaoEntrar: $("botao-entrar"),
+  contaLogada: $("conta-logada"),
+  contaEmail: $("conta-email"),
+  botaoSair: $("botao-sair"),
+  formLogin: $("form-login"),
+  emailLogin: $("email-login"),
+  botaoEnviarLink: $("botao-enviar-link"),
+  statusLogin: $("status-login"),
+  botaoFecharLogin: $("botao-fechar-login"),
   historicoLista: $("historico-lista"),
   botaoLimparHistorico: $("botao-limpar-historico"),
 };
@@ -82,8 +96,12 @@ const estado = {
   despejoAtual: null,
   progresso: { concluidas: [], micro_passos: {} },
   timersProgresso: new Map(), // id do despejo -> timer do envio do progresso à nuvem
-  // Histórico
-  nuvem: false, // o servidor tem banco de dados configurado
+  // Conta e histórico
+  nuvemDisponivel: false, // o servidor oferece histórico na nuvem (banco + login)
+  configAuth: null, // { url, chavePublica } do Supabase, vindos do servidor
+  supabase: null, // cliente do Supabase (só existe quando o login está disponível)
+  usuario: null, // { id, email } de quem está logado
+  nuvem: false, // usar a nuvem agora: disponível E com alguém logado
   historicoDaNuvem: false, // a lista exibida veio da nuvem (e não da cópia local)
   historicoExibido: [], // entradas mostradas no painel, mantidas atualizadas com o progresso
   diasRetencao: 30,
@@ -265,7 +283,11 @@ async function chamarApi(texto) {
   try {
     resposta = await fetch("/api/organizar", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Dispositivo-Id": estado.dispositivoId },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Dispositivo-Id": estado.dispositivoId,
+        ...(await cabecalhoLogin()),
+      },
       body: JSON.stringify({ texto }),
       signal: controle.signal,
     });
@@ -305,7 +327,7 @@ async function chamarApi(texto) {
       ? { id: salvo.id, data: salvo.data }
       : null;
 
-  return { resultado, despejo };
+  return { resultado, despejo, sessaoExpirada: dados.sessao_expirada === true };
 }
 
 // ---------------------------------------------------------------------------
@@ -348,13 +370,17 @@ async function enviar() {
   definirEnviando(true);
 
   try {
-    const { resultado, despejo } = await chamarApi(texto);
+    const { resultado, despejo, sessaoExpirada } = await chamarApi(texto);
     definirEnviando(false);
     // Usa o id da nuvem quando o servidor salvou; senão, um id local.
     const id = despejo?.id ?? gerarId();
     renderizarResultado(resultado, texto, { id, naNuvem: Boolean(despejo) });
     void salvarNoHistorico(texto, resultado, despejo, id); // atualiza o painel em segundo plano
-    mostrarStatus("Pronto! Seus pensamentos foram organizados.");
+    mostrarStatus(
+      sessaoExpirada
+        ? "Pronto! Seus pensamentos foram organizados, mas sua sessão expirou: este despejo ficou salvo só neste navegador. Entre de novo para salvar na nuvem."
+        : "Pronto! Seus pensamentos foram organizados."
+    );
     focarResultado();
   } catch (erro) {
     definirEnviando(false);
@@ -1013,7 +1039,7 @@ async function chamarHistorico(metodo, caminho, corpo) {
   const controle = new AbortController();
   const timer = setTimeout(() => controle.abort(), TIMEOUT_HISTORICO_MS);
 
-  const headers = { "X-Dispositivo-Id": estado.dispositivoId };
+  const headers = { "X-Dispositivo-Id": estado.dispositivoId, ...(await cabecalhoLogin()) };
   if (corpo !== undefined) headers["Content-Type"] = "application/json";
 
   let resposta;
@@ -1057,27 +1083,43 @@ function mostrarAvisoHistorico(mensagem) {
 }
 
 function atualizarTextoArmazenamento() {
-  el.avisoArmazenamento.textContent = estado.nuvem
-    ? `Modo de teste: seus despejos ficam salvos num banco de dados na nuvem por até ${estado.diasRetencao} dias, ` +
-      "ligados a este navegador (sem login). Não escreva informações reais ou sensíveis."
-    : `Seus últimos ${MAX_HISTORICO} despejos ficam salvos apenas neste navegador. ` +
+  let texto;
+  if (estado.nuvem) {
+    texto =
+      `Seus despejos ficam salvos na sua conta, na nuvem (ambiente de teste), por até ${estado.diasRetencao} dias. ` +
+      "Ao sair da conta, a cópia guardada neste navegador é apagada.";
+  } else if (estado.nuvemDisponivel) {
+    texto =
+      `Seus últimos ${MAX_HISTORICO} despejos ficam salvos só neste navegador. ` +
+      "Entre com seu e-mail para guardá-los na nuvem e acessar de outros aparelhos.";
+  } else {
+    texto =
+      `Seus últimos ${MAX_HISTORICO} despejos ficam salvos apenas neste navegador. ` +
       "Se você limpar os dados do navegador ou trocar de aparelho, eles somem.";
+  }
+  el.avisoArmazenamento.textContent = texto;
 }
 
-/** Pergunta ao servidor se o histórico na nuvem está ativo. */
+/** Pergunta ao servidor se o histórico na nuvem (com login) está disponível. */
 async function verificarNuvem() {
   const controle = new AbortController();
   const timer = setTimeout(() => controle.abort(), TIMEOUT_HISTORICO_MS);
   try {
     const resposta = await fetch("/api/status", { signal: controle.signal });
     const dados = await resposta.json();
-    estado.nuvem = dados?.nuvem === true;
+    const auth = dados?.auth;
+    const authValida =
+      auth && typeof auth.url === "string" && /^https:\/\//.test(auth.url) && typeof auth.chave_publica === "string";
+    estado.nuvemDisponivel = dados?.nuvem === true && Boolean(authValida);
+    estado.configAuth = estado.nuvemDisponivel ? { url: auth.url, chavePublica: auth.chave_publica } : null;
     if (Number.isInteger(dados?.dias_retencao)) estado.diasRetencao = dados.dias_retencao;
   } catch {
-    estado.nuvem = false;
+    estado.nuvemDisponivel = false;
+    estado.configAuth = null;
   } finally {
     clearTimeout(timer);
   }
+  estado.nuvem = false; // só vira true quando houver alguém logado
   atualizarTextoArmazenamento();
 }
 
@@ -1245,6 +1287,221 @@ async function limparHistorico() {
 }
 
 // ---------------------------------------------------------------------------
+// Conta (login com link mágico do Supabase)
+// ---------------------------------------------------------------------------
+
+/** Cabeçalho Authorization com o token da sessão, quando há alguém logado. */
+async function cabecalhoLogin() {
+  if (!estado.supabase || !estado.usuario) return {};
+  try {
+    // getSession() devolve a sessão atual e renova o token se ele estiver para vencer.
+    const { data } = await estado.supabase.auth.getSession();
+    const token = data?.session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+function atualizarUiConta() {
+  el.conta.hidden = !estado.nuvemDisponivel;
+  const logado = Boolean(estado.usuario);
+  el.botaoEntrar.hidden = logado;
+  el.contaLogada.hidden = !logado;
+  el.contaEmail.textContent = estado.usuario?.email ?? "";
+  el.contaEmail.title = estado.usuario?.email ?? "";
+  if (logado) fecharFormLogin({ devolverFoco: false });
+}
+
+function abrirFormLogin() {
+  el.formLogin.hidden = false;
+  el.botaoEntrar.setAttribute("aria-expanded", "true");
+  el.statusLogin.textContent = "";
+  el.emailLogin.focus();
+}
+
+function fecharFormLogin({ devolverFoco = true } = {}) {
+  if (el.formLogin.hidden) return;
+  el.formLogin.hidden = true;
+  el.botaoEntrar.setAttribute("aria-expanded", "false");
+  if (devolverFoco && !el.botaoEntrar.hidden) el.botaoEntrar.focus();
+}
+
+async function enviarLinkLogin() {
+  if (!estado.supabase || el.botaoEnviarLink.disabled) return;
+
+  const email = el.emailLogin.value.trim();
+  if (!PADRAO_EMAIL.test(email)) {
+    el.statusLogin.textContent = "Confira o e-mail: parece que falta alguma coisa.";
+    el.emailLogin.focus();
+    return;
+  }
+
+  el.botaoEnviarLink.disabled = true;
+  el.botaoEnviarLink.textContent = "Enviando…";
+  el.statusLogin.textContent = "";
+  try {
+    const { error } = await estado.supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: `${window.location.origin}${window.location.pathname}` },
+    });
+    if (error) throw error;
+    el.statusLogin.textContent =
+      `Pronto! Enviamos um link de acesso para ${email}. Abra seu e-mail e clique nele (confira também o spam).`;
+  } catch (erro) {
+    console.warn("[Login] Falha ao enviar o link:", erro);
+    el.statusLogin.textContent =
+      erro?.status === 429
+        ? "Muitos pedidos de link em pouco tempo. Espere alguns minutos e tente de novo."
+        : "Não consegui enviar o link agora. Confira o e-mail e tente de novo em instantes.";
+  } finally {
+    el.botaoEnviarLink.disabled = false;
+    el.botaoEnviarLink.textContent = "Enviar link";
+  }
+}
+
+async function sair() {
+  if (!estado.supabase) return;
+  el.botaoSair.disabled = true;
+  try {
+    // "local": sai só deste navegador, sem derrubar a sessão em outros aparelhos.
+    const { error } = await estado.supabase.auth.signOut({ scope: "local" });
+    if (error) throw error;
+  } catch (erro) {
+    console.warn("[Login] Falha ao sair:", erro);
+    mostrarErro("Não consegui sair da conta agora. Tente de novo.");
+  } finally {
+    el.botaoSair.disabled = false;
+  }
+}
+
+function apagarCopiaLocal() {
+  try {
+    localStorage.removeItem(CHAVE_HISTORICO);
+  } catch (erro) {
+    console.warn("[Histórico] Não foi possível apagar a cópia local:", erro);
+  }
+}
+
+/**
+ * Leva para a conta os despejos guardados só neste navegador (e os que ele salvou na nuvem antes
+ * do login). Pode ser chamada mais de uma vez: o servidor ignora o que já foi importado.
+ * Devolve quantos despejos foram levados, ou null se falhar.
+ */
+async function importarParaConta() {
+  try {
+    const dados = await chamarHistorico("POST", "/api/despejos/importar", { despejos: lerHistorico() });
+    return (dados?.importados ?? 0) + (dados?.vinculados ?? 0);
+  } catch (erro) {
+    console.warn("[Login] Falha ao importar o histórico deste navegador:", erro);
+    return null;
+  }
+}
+
+/** Reage a entradas e saídas da conta (chamada em fila, uma de cada vez). */
+async function tratarMudancaDeSessao(evento, sessao, { veioDoLink }) {
+  const anterior = estado.usuario;
+  const usuario = sessao?.user ? { id: sessao.user.id, email: sessao.user.email ?? "" } : null;
+
+  estado.usuario = usuario;
+  estado.nuvem = estado.nuvemDisponivel && Boolean(usuario);
+  atualizarUiConta();
+  atualizarTextoArmazenamento();
+
+  // Entrou (ou abriu a página já logado): leva o histórico local para a conta e carrega o da nuvem.
+  if (usuario && anterior?.id !== usuario.id) {
+    const levados = await importarParaConta();
+    await carregarHistorico();
+
+    const partes = [];
+    if (veioDoLink || evento === "SIGNED_IN") partes.push(`Você entrou como ${usuario.email}.`);
+    if (levados > 0) {
+      partes.push(
+        `${levados} ${plural(levados, "despejo deste navegador foi salvo", "despejos deste navegador foram salvos")} na sua conta.`
+      );
+    }
+    if (partes.length) mostrarStatus(partes.join(" "));
+    if (levados === null) {
+      mostrarAvisoHistorico("Não consegui levar o histórico deste navegador para a sua conta agora. Ele continua salvo aqui.");
+    }
+    return;
+  }
+
+  // Saiu: apaga a cópia local (protege quem usa um computador compartilhado) e limpa a tela.
+  if (!usuario && anterior) {
+    apagarCopiaLocal();
+    novoDespejo();
+    await carregarHistorico();
+    mostrarStatus("Você saiu da conta. A cópia do histórico guardada neste navegador foi apagada.");
+    return;
+  }
+
+  // Abriu a página sem estar logado.
+  if (evento === "INITIAL_SESSION") await carregarHistorico();
+}
+
+/** Mensagem de erro que o Supabase coloca no endereço quando o link de acesso não vale mais. */
+function lerErroDoLink() {
+  const parametros = new URLSearchParams(window.location.hash.slice(1));
+  const codigo = parametros.get("error_code") || parametros.get("error");
+  if (!codigo) return null;
+  return codigo === "otp_expired"
+    ? "Esse link de acesso expirou ou já foi usado. Peça um novo em “Entrar”."
+    : "Não consegui concluir o login com esse link. Peça um novo em “Entrar”.";
+}
+
+/** Carrega a biblioteca do Supabase e passa a acompanhar a sessão. */
+async function iniciarLogin() {
+  const veioDoLink = /access_token=/.test(window.location.hash);
+  const erroDoLink = lerErroDoLink();
+
+  let createClient;
+  try {
+    ({ createClient } = await import(SUPABASE_JS_URL));
+  } catch (erro) {
+    console.warn("[Login] Não consegui carregar a biblioteca de login:", erro);
+    estado.nuvemDisponivel = false;
+    atualizarUiConta();
+    atualizarTextoArmazenamento();
+    await carregarHistorico();
+    mostrarAvisoHistorico("Não consegui carregar o login agora. O histórico fica salvo só neste navegador.");
+    return;
+  }
+
+  estado.supabase = createClient(estado.configAuth.url, estado.configAuth.chavePublica, {
+    auth: {
+      // "implicit": o link funciona mesmo se o e-mail abrir em outro navegador (comum no celular).
+      flowType: "implicit",
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storageKey: "brainDumpAI.sessao",
+    },
+  });
+
+  let fila = Promise.resolve();
+  estado.supabase.auth.onAuthStateChange((evento, sessao) => {
+    // A biblioteca recomenda não chamar o Supabase dentro deste callback: agendamos o tratamento,
+    // em fila, para os eventos serem processados um de cada vez.
+    setTimeout(() => {
+      fila = fila
+        .then(() => tratarMudancaDeSessao(evento, sessao, { veioDoLink }))
+        .catch((erro) => console.error("[Login] Erro ao tratar a sessão:", erro));
+    }, 0);
+  });
+
+  // Tira tokens ou erros do endereço (não ficam no histórico do navegador).
+  if (window.location.hash) {
+    setTimeout(() => history.replaceState(null, "", window.location.pathname + window.location.search), 0);
+  }
+  if (erroDoLink) {
+    abrirFormLogin();
+    el.statusLogin.textContent = erroDoLink;
+  }
+  atualizarUiConta();
+}
+
+// ---------------------------------------------------------------------------
 // Inicialização
 // ---------------------------------------------------------------------------
 
@@ -1284,11 +1541,24 @@ function iniciar() {
   configurarVoz();
   atualizarContador();
 
-  // Histórico: mostra logo a cópia local e, se o servidor tiver banco, troca pela da nuvem.
+  // Conta
+  el.botaoEntrar.addEventListener("click", () => (el.formLogin.hidden ? abrirFormLogin() : fecharFormLogin()));
+  el.botaoFecharLogin.addEventListener("click", () => fecharFormLogin());
+  el.botaoSair.addEventListener("click", sair);
+  el.formLogin.addEventListener("submit", (evento) => {
+    evento.preventDefault();
+    enviarLinkLogin();
+  });
+  el.formLogin.addEventListener("keydown", (evento) => {
+    if (evento.key === "Escape") fecharFormLogin();
+  });
+
+  // Histórico: mostra logo a cópia local; se o servidor tiver nuvem com login, inicia o login
+  // (que carrega o histórico da conta quando houver alguém logado).
   estado.dispositivoId = obterDispositivoId();
   atualizarTextoArmazenamento();
   renderizarHistorico(lerHistorico());
-  verificarNuvem().then(carregarHistorico);
+  verificarNuvem().then(() => (estado.nuvemDisponivel ? iniciarLogin() : carregarHistorico()));
 }
 
 iniciar();

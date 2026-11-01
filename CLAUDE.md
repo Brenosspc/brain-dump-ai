@@ -7,7 +7,7 @@ App de brain dump para pessoas com TDAH/ansiedade: o usuário escreve pensamento
 - Estrutura: `server.js` (configuração) → `lib/app.js` (rotas) + `lib/ia.js` (Gemini)
 - Testes: `npm test` (`node:test`, Gemini simulado, sem gastar cota)
 - Frontend: HTML + JS Vanilla ES6 + Tailwind via CDN, sem build step (`public/`)
-- Persistência: Postgres no Supabase (opcional, teste) via `pg` em `lib/db.js`, ligado por `DATABASE_URL`; LocalStorage como cópia/reserva. Schema em `db/schema.sql` (`npm run db:setup`). TLS sempre verificado com `certs/supabase-ca.crt` (nunca `rejectUnauthorized: false`). Sem login: despejos separados por `X-Dispositivo-Id` (UUID anônimo do navegador), retenção de 30 dias
+- Persistência: Postgres no Supabase (opcional, teste) via `pg` em `lib/db.js`, ligado por `DATABASE_URL`; LocalStorage como cópia/reserva. Schema em `db/schema.sql` (`npm run db:setup`). TLS sempre verificado com `certs/supabase-ca.crt` (nunca `rejectUnauthorized: false`). Login com link mágico (Supabase Auth; supabase-js via CDN jsdelivr no frontend, `SUPABASE_URL`/`SUPABASE_ANON_KEY`): só logado salva na nuvem, despejos filtrados por `usuario_id`; o servidor valida o token em `lib/auth.js` via `/auth/v1/user`. Ao entrar, importa o histórico local (`POST /api/despejos/importar`); ao sair, apaga a cópia local. Retenção de 30 dias
 
 ## Rodar
 ```

@@ -6,6 +6,7 @@ import { GoogleGenAI } from "@google/genai";
 import { criarApp } from "./lib/app.js";
 import { criarOrganizador, criarGeradorMicroPassos } from "./lib/ia.js";
 import { criarPool, criarRepositorio, iniciarLimpezaPeriodica } from "./lib/db.js";
+import { criarVerificadorAuth } from "./lib/auth.js";
 
 // ---------------------------------------------------------------------------
 // Configuração
@@ -73,7 +74,39 @@ if (process.env.DATABASE_URL) {
   }
 }
 
-const app = criarApp({ organizar, gerarMicroPassos, repositorio, trustProxy: process.env.TRUST_PROXY });
+// ---------------------------------------------------------------------------
+// Login (Supabase Auth). O histórico na nuvem só fica ativo com banco E login configurados.
+// SUPABASE_URL e SUPABASE_ANON_KEY são públicas (o navegador precisa delas para entrar).
+// ---------------------------------------------------------------------------
+
+let verificarUsuario = null;
+let configAuth = null;
+const SUPABASE_URL = process.env.SUPABASE_URL?.trim();
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY?.trim();
+
+if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+  if (/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(SUPABASE_URL)) {
+    configAuth = { url: SUPABASE_URL.replace(/\/+$/, ""), chavePublica: SUPABASE_ANON_KEY };
+    verificarUsuario = criarVerificadorAuth({ url: configAuth.url, chavePublica: SUPABASE_ANON_KEY });
+  } else {
+    console.error("[Auth] SUPABASE_URL não parece válida (esperado: https://<projeto>.supabase.co). Login desligado.");
+  }
+}
+
+if (repositorio && !verificarUsuario) {
+  console.warn("[Auth] Banco configurado, mas sem SUPABASE_URL/SUPABASE_ANON_KEY: histórico só no navegador.");
+} else if (repositorio && verificarUsuario) {
+  console.log("[Auth] Login com Supabase ativo.");
+}
+
+const app = criarApp({
+  organizar,
+  gerarMicroPassos,
+  repositorio,
+  verificarUsuario,
+  configAuth,
+  trustProxy: process.env.TRUST_PROXY,
+});
 
 // No Express 5, falhas ao abrir a porta (ex.: EADDRINUSE) chegam como argumento do callback.
 app.listen(PORT, (erro) => {
