@@ -1,18 +1,167 @@
 <!DOCTYPE html>
-<html lang="pt-BR" class="dark">
+<html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Despeje seus pensamentos sem ordem e a IA organiza em tarefas, ideias, dúvidas e desabafos." />
+  <meta name="theme-color" content="#020617" />
   <title>Brain Dump AI</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind via CDN (sem build step), com versão fixa -->
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <link rel="stylesheet" href="style.css" />
-</head>
-<body class="bg-neutral-950 text-neutral-100 min-h-screen">
-  <!-- Placeholder: a interface será construída na próxima fase -->
-  <main class="max-w-2xl mx-auto p-6">
-    <h1 class="text-2xl font-semibold">Brain Dump AI</h1>
-    <p class="text-neutral-400 mt-2">Em construção.</p>
-  </main>
+  <!-- Módulos já são carregados com defer -->
   <script type="module" src="app.js"></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
+  <main class="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-16">
+
+    <!-- Cabeçalho -->
+    <header class="mb-8">
+      <h1 class="text-2xl font-semibold tracking-tight text-slate-50 sm:text-3xl">Brain Dump AI</h1>
+      <p class="mt-2 text-slate-400">Despeje tudo o que está na sua cabeça, sem ordem. A gente organiza para você.</p>
+    </header>
+
+    <!-- Entrada -->
+    <form id="form-despejo" novalidate class="space-y-3">
+      <label for="texto" class="block text-sm font-medium text-slate-300">
+        O que está passando pela sua cabeça agora?
+      </label>
+      <textarea
+        id="texto"
+        name="texto"
+        rows="12"
+        spellcheck="true"
+        aria-describedby="contador dica-atalho"
+        placeholder="Ex.: preciso pagar a conta de luz… será que aceito aquele freela? queria começar a desenhar de novo. tô cansado de tudo hoje…"
+        class="w-full resize-y rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-base leading-relaxed text-slate-100 placeholder:text-slate-500 focus:border-indigo-400/60"
+      ></textarea>
+
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p id="contador" class="contador text-xs text-slate-500" data-nivel="normal">0 / 10.000 caracteres · 0 palavras</p>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            id="botao-microfone"
+            aria-pressed="false"
+            aria-describedby="aviso-microfone"
+            class="botao-mic inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-slate-200 hover:border-slate-600 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+          >
+            <span class="ponto-gravacao" aria-hidden="true"></span>
+            <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="2" width="6" height="12" rx="3" />
+              <path d="M5 11a7 7 0 0 0 14 0" />
+              <path d="M12 18v4" />
+            </svg>
+            <span id="rotulo-microfone">Falar em vez de digitar</span>
+          </button>
+
+          <button
+            type="submit"
+            id="botao-enviar"
+            aria-keyshortcuts="Control+Enter Meta+Enter"
+            class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-500 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-950/50 hover:bg-indigo-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none sm:flex-none"
+          >
+            <span id="rotulo-enviar">Organizar</span>
+          </button>
+        </div>
+      </div>
+
+      <p id="dica-atalho" class="text-xs text-slate-500 sm:text-right">
+        Atalho: <kbd id="tecla-mod">Ctrl</kbd> + <kbd>Enter</kbd> para organizar
+      </p>
+      <p id="aviso-microfone" hidden class="text-xs text-slate-500"></p>
+    </form>
+
+    <!-- Status e erros (anunciados por leitores de tela) -->
+    <div class="mt-4 space-y-2">
+      <p id="status" role="status" aria-live="polite" class="min-h-[1.25rem] text-sm text-slate-400"></p>
+      <p id="erro" role="alert" class="caixa-erro rounded-xl border border-rose-900/60 bg-rose-950/40 px-4 py-3 text-sm text-rose-200"></p>
+    </div>
+
+    <!-- Skeleton exibido enquanto a IA trabalha -->
+    <div id="carregando" hidden aria-hidden="true" class="mt-8 space-y-4">
+      <div class="skeleton h-24 rounded-2xl"></div>
+      <div class="skeleton h-24 rounded-2xl"></div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div class="skeleton h-36 rounded-2xl"></div>
+        <div class="skeleton h-36 rounded-2xl"></div>
+        <div class="skeleton h-36 rounded-2xl"></div>
+        <div class="skeleton h-36 rounded-2xl"></div>
+      </div>
+    </div>
+
+    <!-- Resultado -->
+    <section id="resultado" hidden aria-labelledby="titulo-resultado" class="resultado mt-8 space-y-5">
+      <h2 id="titulo-resultado" tabindex="-1" class="text-sm font-medium uppercase tracking-wider text-slate-400">
+        Seus pensamentos, organizados
+      </h2>
+
+      <div class="rounded-2xl border border-indigo-400/20 bg-indigo-500/[0.07] p-5 sm:p-6">
+        <p id="sintese" class="text-lg leading-relaxed text-slate-100 sm:text-xl"></p>
+        <ul class="mt-4 flex flex-wrap gap-2" aria-label="Leitura geral">
+          <li id="tag-carga" class="tag"></li>
+          <li id="tag-estado" class="tag"></li>
+        </ul>
+      </div>
+
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+        <h3 class="text-sm font-medium text-slate-400">Peso cognitivo</h3>
+        <p id="metrica-percentual" class="mt-1 text-xl font-semibold text-sky-300"></p>
+        <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800" aria-hidden="true">
+          <div id="metrica-barra" class="barra h-full rounded-full bg-sky-400/70" style="width: 0%"></div>
+        </div>
+        <p id="metrica-detalhe" class="mt-3 text-sm text-slate-400"></p>
+        <p class="mt-1 text-xs text-slate-500">
+          Métrica motivacional, calculada pela quantidade de itens organizados e de palavras. Não é uma medida clínica.
+        </p>
+      </div>
+
+      <div id="cartoes" class="grid gap-4 sm:grid-cols-2"></div>
+
+      <div class="flex flex-col gap-3 sm:flex-row">
+        <button
+          type="button"
+          id="botao-copiar"
+          class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-slate-200 hover:border-slate-600 hover:bg-slate-800"
+        >
+          <span aria-hidden="true">📋</span>
+          <span id="rotulo-copiar">Copiar apenas tarefas</span>
+        </button>
+        <button
+          type="button"
+          id="botao-novo"
+          class="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-400/30 bg-indigo-500/10 px-4 py-2.5 text-sm text-indigo-200 hover:bg-indigo-500/20"
+        >
+          <span aria-hidden="true">✨</span>
+          Novo despejo
+        </button>
+      </div>
+    </section>
+
+    <!-- Histórico (retrátil) -->
+    <details id="painel-historico" class="historico mt-12 rounded-2xl border border-slate-800 bg-slate-900/40">
+      <summary class="flex cursor-pointer items-center justify-between gap-2 rounded-2xl px-5 py-4 text-sm font-medium text-slate-300 hover:text-slate-100">
+        <span>Histórico <span id="historico-contagem" class="font-normal text-slate-500">(0)</span></span>
+        <span class="seta text-slate-500" aria-hidden="true">▾</span>
+      </summary>
+      <div class="space-y-4 px-5 pb-5">
+        <p class="text-xs text-slate-500">
+          Seus últimos 5 despejos ficam salvos apenas neste navegador. Se você limpar os dados do navegador ou trocar de aparelho, eles somem.
+        </p>
+        <p id="historico-vazio" class="text-sm text-slate-500">Nenhum despejo salvo ainda.</p>
+        <p id="aviso-historico" hidden class="text-xs text-amber-300/90"></p>
+        <ol id="historico-lista" class="space-y-2"></ol>
+        <button
+          type="button"
+          id="botao-limpar-historico"
+          hidden
+          class="rounded-lg px-1 text-sm text-rose-300/80 underline-offset-4 hover:text-rose-200 hover:underline"
+        >
+          Limpar histórico
+        </button>
+      </div>
+    </details>
+  </main>
 </body>
 </html>

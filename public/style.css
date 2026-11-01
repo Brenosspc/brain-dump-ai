@@ -1,1 +1,166 @@
-/* Estilos complementares ao Tailwind (placeholder — frontend vem na próxima fase) */
+/* Estilos complementares ao Tailwind: foco, animações discretas e estados visuais. */
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: #020617; /* slate-950, caso o CDN do Tailwind demore */
+}
+
+/* Garante que o atributo hidden vença classes utilitárias como "flex" ou "grid". */
+[hidden] {
+  display: none !important;
+}
+
+/* Foco sempre visível para quem navega pelo teclado. */
+:focus-visible {
+  outline: 2px solid #818cf8; /* indigo-400 */
+  outline-offset: 2px;
+}
+
+textarea:focus-visible {
+  outline-offset: 0;
+}
+
+kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid #334155;
+  border-bottom-width: 2px;
+  border-radius: 0.3rem;
+  background: #0f172a;
+  color: #cbd5e1;
+}
+
+/* Contador de caracteres: muda de cor perto e acima do limite. */
+.contador[data-nivel="alerta"] {
+  color: #fcd34d; /* amber-300 */
+}
+
+.contador[data-nivel="excedido"] {
+  color: #fda4af; /* rose-300 */
+}
+
+/* Caixa de erro só aparece quando tem conteúdo. */
+.caixa-erro:empty {
+  display: none;
+}
+
+/* Tags discretas (carga cognitiva e estado mental). */
+.tag {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 9999px;
+  border: 1px solid #334155;
+  background: rgb(15 23 42 / 0.6);
+  color: #cbd5e1;
+}
+
+/* Microfone: ponto que indica gravação. */
+.ponto-gravacao {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: #64748b;
+  transition: background-color 0.2s ease;
+}
+
+.botao-mic.gravando {
+  border-color: rgb(244 63 94 / 0.5);
+  background: rgb(76 5 25 / 0.35);
+  color: #fecdd3;
+}
+
+.botao-mic.gravando .ponto-gravacao {
+  background: #f43f5e;
+  animation: pulso 1.8s ease-in-out infinite;
+}
+
+@keyframes pulso {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(244 63 94 / 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgb(244 63 94 / 0);
+  }
+}
+
+/* Skeleton: brilho lento e suave. */
+.skeleton {
+  background: linear-gradient(90deg, #0f172a 25%, #1e293b 50%, #0f172a 75%);
+  background-size: 200% 100%;
+  animation: brilho 2s ease-in-out infinite;
+}
+
+@keyframes brilho {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* Resultado surge com um fade curto. */
+.resultado:not([hidden]) {
+  animation: surgir 0.35s ease-out;
+}
+
+@keyframes surgir {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.barra {
+  transition: width 0.8s ease-out;
+}
+
+/* Painel de histórico: remove o marcador padrão e gira a seta ao abrir. */
+summary {
+  list-style: none;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+.seta {
+  transition: transform 0.2s ease;
+}
+
+.historico[open] .seta {
+  transform: rotate(180deg);
+}
+
+/* Respeita quem prefere menos movimento: sem animações nem transições. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .skeleton {
+    animation: none;
+    background: #1e293b;
+  }
+
+  /* Sem pulso: o estado de gravação continua visível pela cor e pelo anel fixo. */
+  .botao-mic.gravando .ponto-gravacao {
+    animation: none;
+    box-shadow: 0 0 0 3px rgb(244 63 94 / 0.35);
+  }
+}
