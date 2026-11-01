@@ -5,7 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Despeje seus pensamentos sem ordem e a IA organiza em tarefas, ideias, dúvidas e desabafos." />
   <meta name="theme-color" content="#020617" />
-  <title>Brain Dump AI</title>
+  <title>Brain Dump AI: despeje seus pensamentos, a IA organiza</title>
+  <meta property="og:title" content="Brain Dump AI" />
+  <meta property="og:description" content="Despeje seus pensamentos sem ordem e a IA organiza em tarefas, ideias, dúvidas e desabafos. Pensado para TDAH e ansiedade." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://brain-dump-ai-tomp.onrender.com/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <!-- Lexend: fonte pensada para facilitar a leitura -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@300..700&display=swap" />
   <!-- Tailwind compilado (npm run build:css): só as classes usadas, sem depender de CDN -->
   <link rel="stylesheet" href="tailwind.css" />
   <link rel="stylesheet" href="style.css" />
@@ -18,7 +28,28 @@
     <!-- Cabeçalho -->
     <header class="mb-8">
       <div class="flex items-start justify-between gap-4">
-        <h1 class="text-2xl font-semibold tracking-tight text-slate-50 sm:text-3xl">Brain Dump AI</h1>
+        <div class="flex items-center gap-3">
+          <!-- Logo: um rabisco (pensamentos soltos) virando uma lista com checks -->
+          <svg aria-hidden="true" class="logo h-10 w-10 shrink-0 sm:h-11 sm:w-11" viewBox="0 0 64 64">
+            <defs>
+              <linearGradient id="gradiente-logo" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#818cf8" />
+                <stop offset="1" stop-color="#2dd4bf" />
+              </linearGradient>
+            </defs>
+            <rect width="64" height="64" rx="16" fill="url(#gradiente-logo)" />
+            <g fill="none" stroke="#0b1020" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 20c4-5 8 5 12 0s8 5 12 0 8 5 12 0" />
+              <path d="M15 35l4 4 7-8" />
+              <path d="M32 36h17" />
+              <path d="M15 48l4 4 7-8" />
+              <path d="M32 49h12" />
+            </g>
+          </svg>
+          <h1 class="text-2xl font-semibold tracking-tight text-slate-50 sm:text-3xl">
+            Brain Dump <span class="bg-gradient-to-r from-indigo-300 via-sky-300 to-teal-200 bg-clip-text text-transparent">AI</span>
+          </h1>
+        </div>
 
         <!-- Conta: só aparece quando o servidor tem histórico na nuvem com login -->
         <div id="conta" hidden class="shrink-0 pt-1 text-right text-sm">
@@ -44,7 +75,25 @@
           </div>
         </div>
       </div>
-      <p class="mt-2 text-slate-400">Despeje tudo o que está na sua cabeça, sem ordem. A gente organiza para você.</p>
+      <p class="mt-4 text-lg leading-relaxed text-slate-300">
+        Despeje tudo o que está na sua cabeça, sem ordem. <span class="text-slate-400">A gente organiza para você.</span>
+      </p>
+
+      <!-- Como funciona -->
+      <ol class="passos-intro mt-6 grid gap-2 sm:grid-cols-3 sm:gap-3" aria-label="Como funciona">
+        <li class="flex items-center gap-3 rounded-2xl border border-slate-800/80 bg-slate-900/40 px-4 py-3 sm:items-start sm:py-4">
+          <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-sm font-semibold text-indigo-300" aria-hidden="true">1</span>
+          <p class="text-sm leading-snug text-slate-400"><strong class="block font-medium text-slate-200">Despeje</strong>Escreva ou fale tudo, do jeito que vier.</p>
+        </li>
+        <li class="flex items-center gap-3 rounded-2xl border border-slate-800/80 bg-slate-900/40 px-4 py-3 sm:items-start sm:py-4">
+          <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-sky-500/15 text-sm font-semibold text-sky-300" aria-hidden="true">2</span>
+          <p class="text-sm leading-snug text-slate-400"><strong class="block font-medium text-slate-200">A IA organiza</strong>Tarefas, ideias, dúvidas e desabafos.</p>
+        </li>
+        <li class="flex items-center gap-3 rounded-2xl border border-slate-800/80 bg-slate-900/40 px-4 py-3 sm:items-start sm:py-4">
+          <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-teal-500/15 text-sm font-semibold text-teal-300" aria-hidden="true">3</span>
+          <p class="text-sm leading-snug text-slate-400"><strong class="block font-medium text-slate-200">Dê o próximo passo</strong>Marque o que fez e quebre o difícil em partes.</p>
+        </li>
+      </ol>
     </header>
 
     <!-- Login por link mágico (sem senha) -->
@@ -85,17 +134,27 @@
 
     <!-- Entrada -->
     <form id="form-despejo" novalidate class="space-y-3">
-      <label for="texto" class="block text-sm font-medium text-slate-300">
-        O que está passando pela sua cabeça agora?
-      </label>
+      <div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+        <label for="texto" class="block text-sm font-medium text-slate-300">
+          O que está passando pela sua cabeça agora?
+        </label>
+        <button
+          type="button"
+          id="botao-exemplo"
+          class="rounded px-0.5 text-sm text-sky-300/90 underline-offset-4 hover:text-sky-200 hover:underline"
+        >
+          <span aria-hidden="true">✨</span> Ver um exemplo pronto
+        </button>
+      </div>
+      <!-- Cresce sozinha conforme o texto (ver ajustarAlturaTexto em app.js) -->
       <textarea
         id="texto"
         name="texto"
-        rows="12"
+        rows="5"
         spellcheck="true"
         aria-describedby="contador dica-atalho"
         placeholder="Ex.: preciso pagar a conta de luz… será que aceito aquele freela? queria começar a desenhar de novo. tô cansado de tudo hoje…"
-        class="w-full resize-y rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-base leading-relaxed text-slate-100 placeholder:text-slate-500 focus:border-indigo-400/60"
+        class="caixa-texto w-full resize-none rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-base leading-relaxed text-slate-100 placeholder:text-slate-500 focus:border-indigo-400/60"
       ></textarea>
 
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -107,7 +166,7 @@
             id="botao-microfone"
             aria-pressed="false"
             aria-describedby="aviso-microfone"
-            class="botao-mic inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-slate-200 hover:border-slate-600 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+            class="botao-mic inline-flex flex-1 items-center whitespace-nowrap justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-slate-200 hover:border-slate-600 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
           >
             <span class="ponto-gravacao" aria-hidden="true"></span>
             <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -122,7 +181,7 @@
             type="submit"
             id="botao-enviar"
             aria-keyshortcuts="Control+Enter Meta+Enter"
-            class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-500 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-950/50 hover:bg-indigo-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none sm:flex-none"
+            class="inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-indigo-500 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-950/50 hover:bg-indigo-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none sm:flex-none"
           >
             <span id="rotulo-enviar">Organizar</span>
           </button>
@@ -141,16 +200,17 @@
       <p id="erro" role="alert" class="caixa-erro rounded-xl border border-rose-900/60 bg-rose-950/40 px-4 py-3 text-sm text-rose-200"></p>
     </div>
 
-    <!-- Skeleton exibido enquanto a IA trabalha -->
-    <div id="carregando" hidden aria-hidden="true" class="mt-8 space-y-4">
-      <div class="skeleton h-24 rounded-2xl"></div>
-      <div class="skeleton h-24 rounded-2xl"></div>
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div class="skeleton h-36 rounded-2xl"></div>
-        <div class="skeleton h-36 rounded-2xl"></div>
-        <div class="skeleton h-36 rounded-2xl"></div>
-        <div class="skeleton h-36 rounded-2xl"></div>
+    <!-- Enquanto a IA trabalha: um convite para respirar (o status em texto fica no #status) -->
+    <div id="carregando" hidden aria-hidden="true" class="mt-8 flex flex-col items-center rounded-2xl border border-slate-800/80 bg-slate-900/40 px-6 py-10">
+      <div class="respiracao relative flex h-36 w-36 items-center justify-center">
+        <span class="respiracao-halo absolute inset-0 rounded-full"></span>
+        <span class="respiracao-circulo absolute inset-6 rounded-full"></span>
+        <span class="relative grid text-center text-sm font-medium text-slate-100">
+          <span class="respiracao-inspire [grid-area:1/1]">Inspire…</span>
+          <span class="respiracao-expire [grid-area:1/1]">Expire…</span>
+        </span>
       </div>
+      <p class="mt-6 text-sm text-slate-400">Enquanto a IA organiza seus pensamentos, respire com calma.</p>
     </div>
 
     <!-- Resultado -->
@@ -158,6 +218,12 @@
       <h2 id="titulo-resultado" tabindex="-1" class="text-sm font-medium uppercase tracking-wider text-slate-400">
         Seus pensamentos, organizados
       </h2>
+
+      <!-- Aparece só no exemplo pronto -->
+      <p id="aviso-exemplo" hidden class="flex items-start gap-2 rounded-xl border border-sky-400/20 bg-sky-500/[0.06] px-4 py-3 text-sm leading-relaxed text-sky-100/90">
+        <span aria-hidden="true">✨</span>
+        <span>Este é um <strong class="font-semibold">exemplo pronto</strong>: nada foi enviado à IA. Quando quiser, clique em “Novo despejo” e escreva o seu.</span>
+      </p>
 
       <!-- Apoio: aparece só quando o texto mostra sinais de sofrimento intenso -->
       <aside id="apoio" hidden aria-labelledby="titulo-apoio" class="rounded-2xl border border-teal-400/25 bg-teal-500/[0.07] p-5 sm:p-6">
@@ -191,9 +257,11 @@
 
       <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
         <h3 class="text-sm font-medium text-slate-400">Peso cognitivo</h3>
-        <p id="metrica-percentual" class="mt-1 text-xl font-semibold text-sky-300"></p>
-        <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800" aria-hidden="true">
-          <div id="metrica-barra" class="barra h-full rounded-full bg-sky-400/70" style="width: 0%"></div>
+        <p class="mt-1 text-xl font-semibold text-slate-100">
+          Sua mente está <span id="metrica-percentual" class="bg-gradient-to-r from-sky-300 to-teal-200 bg-clip-text text-transparent">0%</span> mais leve
+        </p>
+        <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-800" aria-hidden="true">
+          <div id="metrica-barra" class="barra h-full rounded-full bg-gradient-to-r from-sky-400 to-teal-300" style="width: 0%"></div>
         </div>
         <p id="metrica-detalhe" class="mt-3 text-sm text-slate-400"></p>
         <p class="mt-1 text-xs text-slate-500">
@@ -256,6 +324,10 @@
         <a href="tel:188" class="text-slate-400 underline underline-offset-2 hover:text-slate-200">188</a>.
       </p>
       <p class="mt-1">O Brain Dump AI organiza pensamentos e não substitui acompanhamento profissional.</p>
+      <p class="mt-4 text-slate-600">
+        Feito por Breno Cardoso ·
+        <a href="https://github.com/Brenosspc/brain-dump-ai" target="_blank" rel="noopener noreferrer" class="text-slate-500 underline underline-offset-2 hover:text-slate-300">código no GitHub</a>
+      </p>
     </footer>
   </main>
 </body>

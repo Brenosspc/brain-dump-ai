@@ -23,12 +23,66 @@ const PADRAO_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Biblioteca oficial do Supabase (login), com versão fixa e carregada só quando o login existe.
 const SUPABASE_JS_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm";
 
+// Cada categoria tem uma cor própria: borda de destaque, selo do ícone e marcador da lista.
 const CATEGORIAS = [
-  { chave: "tarefas", emoji: "🔴", titulo: "Tarefas" },
-  { chave: "ideias", emoji: "💡", titulo: "Ideias" },
-  { chave: "duvidas", emoji: "❓", titulo: "Dúvidas" },
-  { chave: "desabafos", emoji: "🧘", titulo: "Desabafos" },
+  {
+    chave: "tarefas",
+    emoji: "📝",
+    titulo: "Tarefas",
+    borda: "border-l-sky-400/70",
+    selo: "bg-sky-500/15",
+    marcador: "marker:text-sky-400/70",
+  },
+  {
+    chave: "ideias",
+    emoji: "💡",
+    titulo: "Ideias",
+    borda: "border-l-amber-400/70",
+    selo: "bg-amber-500/15",
+    marcador: "marker:text-amber-400/70",
+  },
+  {
+    chave: "duvidas",
+    emoji: "❓",
+    titulo: "Dúvidas",
+    borda: "border-l-violet-400/70",
+    selo: "bg-violet-500/15",
+    marcador: "marker:text-violet-400/70",
+  },
+  {
+    chave: "desabafos",
+    emoji: "🧘",
+    titulo: "Desabafos",
+    borda: "border-l-teal-400/70",
+    selo: "bg-teal-500/15",
+    marcador: "marker:text-teal-400/70",
+  },
 ];
+
+// Exemplo pronto ("Ver um exemplo pronto"): mostra o app funcionando sem chamar a IA nem gastar cota.
+const EXEMPLO = {
+  texto:
+    "amanhã tenho reunião às 9h e ainda não montei a apresentação. preciso renovar a CNH que vence esse mês. " +
+    "a pia tá cheia de louça. será que eu peço mais prazo pro meu chefe? queria muito começar a correr de manhã. " +
+    "me sinto atrasado em tudo e fico me comparando com os outros",
+  resultado: {
+    sintese_acolhedora:
+      "Tem bastante coisa disputando a sua atenção agora, e é compreensível se sentir atrasado. Vamos separar tudo e começar pelo que está mais perto.",
+    nivel_carga_cognitiva: "Alta",
+    estado_mental: "Sobrecarga com autocobrança",
+    tarefas: ["Montar a apresentação da reunião de amanhã", "Renovar a CNH antes do vencimento", "Lavar a louça da pia"],
+    ideias: ["Começar a correr de manhã"],
+    duvidas: ["Devo pedir mais prazo ao meu chefe?"],
+    desabafos: ["Sensação de estar atrasado em tudo", "Comparação constante com outras pessoas"],
+    sugerir_apoio: false,
+  },
+  // Micro-passos prontos, um por tarefa (mesma ordem de resultado.tarefas).
+  passos: [
+    ["Abrir um arquivo de slides em branco", "Escrever o título e 3 tópicos", "Colocar uma frase em cada tópico", "Ensaiar uma vez em voz alta"],
+    ["Entrar no site do Detran do seu estado", "Ver a lista de documentos exigidos", "Agendar o exame médico", "Separar o comprovante de residência"],
+    ["Colocar uma música animada", "Lavar só os copos primeiro", "Lavar pratos e talheres", "Deixar as panelas de molho"],
+  ],
+};
 
 const CAMPOS_TEXTO = ["sintese_acolhedora", "nivel_carga_cognitiva", "estado_mental"];
 
@@ -41,6 +95,8 @@ const $ = (id) => document.getElementById(id);
 const el = {
   form: $("form-despejo"),
   texto: $("texto"),
+  botaoExemplo: $("botao-exemplo"),
+  avisoExemplo: $("aviso-exemplo"),
   contador: $("contador"),
   botaoEnviar: $("botao-enviar"),
   rotuloEnviar: $("rotulo-enviar"),
@@ -92,8 +148,10 @@ const estado = {
   enviando: false,
   resultadoAtual: null,
   timerCopia: null,
+  quadroContagem: 0, // requestAnimationFrame da contagem da métrica
   // Despejo na tela: { id, naNuvem } e o progresso do checklist
   despejoAtual: null,
+  modoExemplo: false, // o resultado na tela é o exemplo pronto (nada é salvo nem enviado à IA)
   progresso: { concluidas: [], micro_passos: {} },
   timersProgresso: new Map(), // id do despejo -> timer do envio do progresso à nuvem
   // Conta e histórico
@@ -203,7 +261,14 @@ function atualizarContador() {
 
   el.contador.textContent = mensagem;
   el.contador.dataset.nivel = nivel;
+  ajustarAlturaTexto();
   atualizarBotaoEnviar();
+}
+
+/** Faz a caixa de texto crescer com o conteúdo (os limites ficam no CSS: min-height e max-height). */
+function ajustarAlturaTexto() {
+  el.texto.style.height = "auto";
+  el.texto.style.height = `${el.texto.scrollHeight + 2}px`;
 }
 
 function atualizarBotaoEnviar() {
@@ -404,17 +469,19 @@ function calcularLeveza(palavras, itens) {
   return Math.min(90, 10 + 5 * itens + Math.floor(palavras / 25));
 }
 
-function criarCartao({ chave, emoji, titulo }, itens) {
+/** Moldura comum dos cartões: borda colorida da categoria e título com o ícone num selo. */
+function criarMolduraCartao({ chave, emoji, titulo, borda, selo }, extraClasse = "") {
   const secao = document.createElement("section");
-  secao.className = "rounded-2xl border border-slate-800 bg-slate-900/60 p-5";
+  secao.className = `cartao rounded-2xl border border-l-4 border-slate-800 ${borda} bg-slate-900/60 p-5 ${extraClasse}`;
   secao.setAttribute("aria-labelledby", `cartao-${chave}`);
 
   const cabecalho = document.createElement("h3");
   cabecalho.id = `cartao-${chave}`;
-  cabecalho.className = "flex items-center gap-2 text-base font-semibold text-slate-100";
+  cabecalho.className = "flex items-center gap-2.5 text-base font-semibold text-slate-100";
 
   const icone = document.createElement("span");
   icone.setAttribute("aria-hidden", "true");
+  icone.className = `flex h-8 w-8 items-center justify-center rounded-lg text-base ${selo}`;
   icone.textContent = emoji;
 
   const nome = document.createElement("span");
@@ -422,19 +489,25 @@ function criarCartao({ chave, emoji, titulo }, itens) {
 
   const contagem = document.createElement("span");
   contagem.className = "ml-auto text-xs font-normal text-slate-500";
-  contagem.textContent = `${itens.length} ${plural(itens.length, "item", "itens")}`;
 
   cabecalho.append(icone, nome, contagem);
+  secao.append(cabecalho);
+  return { secao, contagem };
+}
+
+function criarCartao(categoria, itens) {
+  const { secao, contagem } = criarMolduraCartao(categoria);
+  contagem.textContent = `${itens.length} ${plural(itens.length, "item", "itens")}`;
 
   const lista = document.createElement("ul");
-  lista.className = "mt-3 list-disc space-y-2 pl-5 leading-relaxed text-slate-300 marker:text-slate-600";
+  lista.className = `mt-3 list-disc space-y-2 pl-5 leading-relaxed text-slate-300 ${categoria.marcador}`;
   for (const item of itens) {
     const li = document.createElement("li");
     li.textContent = item;
     lista.append(li);
   }
 
-  secao.append(cabecalho, lista);
+  secao.append(lista);
   return secao;
 }
 
@@ -443,10 +516,12 @@ function criarCartao({ chave, emoji, titulo }, itens) {
  * @param {string} texto texto original do despejo
  * @param {{ id?: string, naNuvem?: boolean, progresso?: object }} [contexto] identificação e progresso salvos
  */
-function renderizarResultado(resultado, texto, { id = null, naNuvem = false, progresso = null } = {}) {
+function renderizarResultado(resultado, texto, { id = null, naNuvem = false, progresso = null, exemplo = false } = {}) {
   estado.resultadoAtual = resultado;
   estado.despejoAtual = id ? { id, naNuvem } : null;
+  estado.modoExemplo = exemplo;
   estado.progresso = validarProgresso(progresso);
+  el.avisoExemplo.hidden = !exemplo;
 
   // Cartão de apoio (CVV) só quando há sinais de sofrimento intenso.
   el.apoio.hidden = !resultado.sugerir_apoio;
@@ -461,7 +536,7 @@ function renderizarResultado(resultado, texto, { id = null, naNuvem = false, pro
   const itens = CATEGORIAS.reduce((soma, { chave }) => soma + resultado[chave].length, 0);
   const percentual = calcularLeveza(palavras, itens);
 
-  el.metricaPercentual.textContent = `Sua mente está ${percentual}% mais leve`;
+  el.metricaPercentual.textContent = `${percentual}%`;
   el.metricaDetalhe.textContent =
     `Processamos ${formatarNumero(palavras)} ${plural(palavras, "palavra", "palavras")} ` +
     `(${formatarNumero(caracteres)} caracteres) e organizamos em ${itens} ${plural(itens, "item", "itens")}.`;
@@ -486,7 +561,7 @@ function renderizarResultado(resultado, texto, { id = null, naNuvem = false, pro
   clearTimeout(estado.timerCopia);
   el.rotuloCopiar.textContent = "Copiar apenas tarefas";
 
-  // Mostra o resultado e anima a barra a partir do zero
+  // Mostra o resultado e anima a barra (e o número) a partir do zero
   el.metricaBarra.style.width = "0%";
   el.resultado.hidden = false;
   requestAnimationFrame(() =>
@@ -494,6 +569,24 @@ function renderizarResultado(resultado, texto, { id = null, naNuvem = false, pro
       el.metricaBarra.style.width = `${percentual}%`;
     })
   );
+  animarContagem(el.metricaPercentual, percentual);
+}
+
+/** Conta de 0 até o valor final em ~0,8 s (sem animação para quem prefere menos movimento). */
+function animarContagem(elemento, final) {
+  cancelAnimationFrame(estado.quadroContagem);
+  if (reduzMovimento()) {
+    elemento.textContent = `${final}%`;
+    return;
+  }
+  const inicio = performance.now();
+  const passo = (agora) => {
+    const t = Math.min(1, (agora - inicio) / 800);
+    const suave = 1 - (1 - t) ** 3;
+    elemento.textContent = `${Math.round(final * suave)}%`;
+    if (t < 1) estado.quadroContagem = requestAnimationFrame(passo);
+  };
+  estado.quadroContagem = requestAnimationFrame(passo);
 }
 
 function focarResultado() {
@@ -505,39 +598,31 @@ function focarResultado() {
 // Checklist de tarefas e micro-passos
 // ---------------------------------------------------------------------------
 
-function criarCartaoTarefas({ chave, emoji, titulo }, tarefas) {
-  const secao = document.createElement("section");
-  secao.className = "rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:col-span-2";
-  secao.setAttribute("aria-labelledby", `cartao-${chave}`);
-
-  const cabecalho = document.createElement("h3");
-  cabecalho.id = `cartao-${chave}`;
-  cabecalho.className = "flex items-center gap-2 text-base font-semibold text-slate-100";
-
-  const icone = document.createElement("span");
-  icone.setAttribute("aria-hidden", "true");
-  icone.textContent = emoji;
-
-  const nome = document.createElement("span");
-  nome.textContent = titulo;
-
-  const contagem = document.createElement("span");
-  contagem.className = "ml-auto text-xs font-normal text-slate-500";
+function criarCartaoTarefas(categoria, tarefas) {
+  const { secao, contagem } = criarMolduraCartao(categoria, "sm:col-span-2");
   contagem.dataset.contagemTarefas = "";
 
-  cabecalho.append(icone, nome, contagem);
+  // Barra de progresso das tarefas (enche conforme você marca)
+  const trilho = document.createElement("div");
+  trilho.className = "mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800";
+  trilho.setAttribute("aria-hidden", "true");
+  const barra = document.createElement("div");
+  barra.className = "barra h-full rounded-full bg-gradient-to-r from-sky-400 to-teal-300";
+  barra.style.width = "0%";
+  barra.dataset.barraTarefas = "";
+  trilho.append(barra);
 
   const lista = document.createElement("ul");
   lista.className = "mt-3 space-y-3";
   tarefas.forEach((tarefa, indice) => lista.append(criarItemTarefa(tarefa, indice)));
 
   const parabens = document.createElement("p");
-  parabens.className = "mt-4 text-sm text-sky-300";
+  parabens.className = "parabens mt-4 text-sm text-teal-300";
   parabens.dataset.tarefasConcluidas = "";
   parabens.hidden = true;
   parabens.textContent = "Tudo feito por aqui. 🌱 Bom trabalho, no seu ritmo.";
 
-  secao.append(cabecalho, lista, parabens);
+  secao.append(trilho, lista, parabens);
   return secao;
 }
 
@@ -605,6 +690,11 @@ function alternarTarefa(indice, marcada, li) {
   estado.progresso.concluidas = [...conjunto].sort((a, b) => a - b);
 
   li.classList.toggle("concluida", marcada);
+  if (marcada) {
+    li.classList.remove("comemorar");
+    void li.offsetWidth; // reinicia a animação se a pessoa marcar de novo
+    li.classList.add("comemorar");
+  }
   atualizarResumoTarefas({ anunciar: true });
   salvarProgresso();
 }
@@ -618,6 +708,8 @@ function atualizarResumoTarefas({ anunciar }) {
   const total = estado.resultadoAtual?.tarefas.length ?? 0;
   const feitas = estado.progresso.concluidas.filter((indice) => indice < total).length;
   contagem.textContent = `${feitas} de ${total} ${plural(total, "feita", "feitas")}`;
+  const barra = el.cartoes.querySelector("[data-barra-tarefas]");
+  if (barra) barra.style.width = `${total ? Math.round((feitas / total) * 100) : 0}%`;
 
   const tudoFeito = total > 0 && feitas === total;
   const jaMostrava = !parabens.hidden;
@@ -677,7 +769,7 @@ async function pedirMicroPassos(tarefa, indice, area, botao) {
 
   const despejoAlvo = estado.despejoAtual?.id;
   try {
-    const passos = await chamarMicroPassos(tarefa);
+    const passos = estado.modoExemplo ? await passosDoExemplo(indice) : await chamarMicroPassos(tarefa);
     // A pessoa pode ter aberto outro despejo enquanto esperava.
     if (estado.despejoAtual?.id !== despejoAlvo || !area.isConnected) return;
 
@@ -693,6 +785,14 @@ async function pedirMicroPassos(tarefa, indice, area, botao) {
     if (!(erro instanceof ErroAmigavel)) console.error("[Micro-passos] Erro inesperado:", erro);
     mostrarErro(erro instanceof ErroAmigavel ? erro.message : "Não consegui dividir essa tarefa agora.");
   }
+}
+
+/** No exemplo pronto, os passos já vêm prontos (uma pausa curta imita o tempo da IA). */
+async function passosDoExemplo(indice) {
+  await new Promise((resolver) => setTimeout(resolver, reduzMovimento() ? 0 : 900));
+  const passos = EXEMPLO.passos[indice];
+  if (!passos) throw new ErroAmigavel("Não há passos prontos para essa tarefa no exemplo.");
+  return passos;
 }
 
 /**
@@ -795,6 +895,23 @@ async function copiarTarefas() {
 }
 
 // ---------------------------------------------------------------------------
+// Exemplo pronto
+// ---------------------------------------------------------------------------
+
+/** Mostra um despejo de exemplo já organizado, sem chamar a IA e sem salvar no histórico. */
+function mostrarExemplo() {
+  if (estado.enviando) return;
+  pararGravacao();
+  limparMensagens();
+  el.texto.value = EXEMPLO.texto;
+  atualizarContador();
+  const resultado = validarResultado(EXEMPLO.resultado);
+  renderizarResultado(resultado, EXEMPLO.texto, { exemplo: true });
+  mostrarStatus("Exemplo pronto carregado. Marque uma tarefa ou quebre outra em passos menores para ver como funciona.");
+  focarResultado();
+}
+
+// ---------------------------------------------------------------------------
 // Novo despejo
 // ---------------------------------------------------------------------------
 
@@ -802,6 +919,8 @@ function novoDespejo() {
   pararGravacao();
   estado.resultadoAtual = null;
   estado.despejoAtual = null;
+  estado.modoExemplo = false;
+  el.avisoExemplo.hidden = true;
   estado.progresso = progressoVazio();
   el.resultado.hidden = true;
   el.cartoes.replaceChildren();
@@ -1186,7 +1305,7 @@ function criarItemHistorico(entrada) {
   resumo.className = "mt-1 truncate text-sm text-slate-300";
   resumo.textContent = entrada.texto.replace(/\s+/g, " ").trim().slice(0, 120);
 
-  info.append(quando, resumo);
+  info.append(quando, resumo, criarPreviaHistorico(entrada));
 
   const acoes = document.createElement("div");
   acoes.className = "flex shrink-0 items-center gap-1";
@@ -1212,6 +1331,36 @@ function criarItemHistorico(entrada) {
   acoes.append(botaoReabrir, botaoApagar);
   li.append(info, acoes);
   return li;
+}
+
+/** Selos com o resumo do despejo: quantos itens de cada categoria e tarefas feitas. */
+function criarPreviaHistorico(entrada) {
+  const previa = document.createElement("ul");
+  previa.className = "mt-2 flex flex-wrap gap-1.5";
+  previa.setAttribute("aria-label", "Resumo do despejo");
+
+  const selo = (texto, classe) => {
+    const item = document.createElement("li");
+    item.className = `rounded-full px-2 py-0.5 text-[11px] ${classe}`;
+    item.textContent = texto;
+    previa.append(item);
+  };
+
+  const nomes = {
+    tarefas: ["tarefa", "tarefas"],
+    ideias: ["ideia", "ideias"],
+    duvidas: ["dúvida", "dúvidas"],
+    desabafos: ["desabafo", "desabafos"],
+  };
+  for (const { chave, selo: cor } of CATEGORIAS) {
+    const n = entrada.resultado?.[chave]?.length ?? 0;
+    if (n > 0) selo(`${n} ${plural(n, ...nomes[chave])}`, `${cor} text-slate-300`);
+  }
+
+  const total = entrada.resultado?.tarefas?.length ?? 0;
+  const feitas = (entrada.progresso?.concluidas ?? []).filter((i) => i < total).length;
+  if (total > 0 && feitas > 0) selo(`✓ ${feitas}/${total} feitas`, "bg-slate-800 text-teal-300");
+  return previa;
 }
 
 function renderizarHistorico(lista) {
@@ -1534,6 +1683,9 @@ function iniciar() {
     atualizarContador();
   });
 
+  el.botaoExemplo.addEventListener("click", mostrarExemplo);
+  // A largura muda (girar o celular, redimensionar a janela): recalcula a altura da caixa de texto.
+  window.addEventListener("resize", ajustarAlturaTexto, { passive: true });
   el.botaoCopiar.addEventListener("click", copiarTarefas);
   el.botaoNovo.addEventListener("click", novoDespejo);
   el.botaoLimparHistorico.addEventListener("click", limparHistorico);

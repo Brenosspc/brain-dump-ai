@@ -59,7 +59,7 @@ describe("rotas", () => {
   it("serve a página inicial", async () => {
     const resposta = await fetch(`${servidor.base}/`);
     assert.equal(resposta.status, 200);
-    assert.match(await resposta.text(), /<title>Brain Dump AI<\/title>/);
+    assert.match(await resposta.text(), /<title>Brain Dump AI[^<]*<\/title>/);
   });
 
   it("organiza o texto e devolve a resposta sanitizada", async () => {
