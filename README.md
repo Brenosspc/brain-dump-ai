@@ -1,44 +1,108 @@
-# 🧠 Brain Dump AI (em andamento)
+<div align="center">
 
-Despeje tudo o que está na sua cabeça, sem ordem, e deixe a IA organizar.
+# 🧠 Brain Dump AI
 
-O **Brain Dump AI** foi pensado para pessoas com **TDAH e ansiedade**: você escreve (ou fala) os pensamentos do jeito que vierem, e a IA (Google Gemini) os separa em **tarefas**, **ideias**, **dúvidas** e **desabafos**, com uma síntese acolhedora do seu momento.
+**Despeje tudo o que está na sua cabeça, sem ordem. A IA organiza para você.**
 
+Um app de *brain dump* pensado para pessoas com **TDAH e ansiedade**: você escreve (ou fala) os pensamentos do jeito que vierem, e o Google Gemini os separa em **tarefas**, **ideias**, **dúvidas** e **desabafos**, com uma leitura acolhedora do seu momento.
+
+![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=nodedotjs&logoColor=white)
+![Express](https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white)
+![Google Gemini](https://img.shields.io/badge/Google%20Gemini-IA-8E75B2?logo=googlegemini&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?logo=supabase&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-UI-06B6D4?logo=tailwindcss&logoColor=white)
+![Testes](https://img.shields.io/badge/testes-125%20passando-brightgreen)
+
+<img src="docs/demo.gif" alt="Demonstração: um texto bagunçado é digitado, a IA o organiza em tarefas, ideias, dúvidas e desabafos, uma tarefa é marcada como feita e outra é quebrada em passos menores" width="760">
+
+</div>
+
+> [!NOTE]
 > Projeto de portfólio. Não é uma ferramenta clínica e não substitui acompanhamento profissional.
 
----
+## 📌 Sumário
+
+- [O problema](#-o-problema)
+- [Funcionalidades](#-funcionalidades)
+- [Capturas de tela](#-capturas-de-tela)
+- [Como funciona](#-como-funciona)
+- [Decisões técnicas](#-decisões-técnicas)
+- [Como rodar](#-como-rodar)
+- [API](#-api)
+- [Segurança e privacidade](#-segurança-e-privacidade)
+- [Estrutura do projeto](#-estrutura-do-projeto)
+- [Limitações e próximos passos](#-limitações-e-próximos-passos)
+
+## 💭 O problema
+
+Quando a cabeça está cheia, organizar os pensamentos já é uma tarefa a mais. Listas de tarefas comuns pedem que você chegue com tudo separado e priorizado, e é justamente isso que fica difícil num dia de sobrecarga.
+
+O Brain Dump AI inverte a ordem: **primeiro você esvazia a cabeça, do jeito que vier, e depois recebe tudo organizado**, com tarefas que começam por um verbo, sentimentos acolhidos sem julgamento e a opção de quebrar o que parece grande demais em passos pequenos.
 
 ## ✨ Funcionalidades
 
-- **Escreva sem filtro:** caixa de texto ampla, contador de caracteres/palavras e atalho **Ctrl + Enter** (ou **⌘ + Enter**) para organizar.
-- **Fale em vez de digitar:** ditado por voz em português (Web Speech API), anexado ao texto. Funciona no Chrome e no Edge.
-- **Organização com IA:**
-  - 🔴 **Tarefas:** ações concretas, começando com verbo
-  - 💡 **Ideias:** projetos e possibilidades
-  - ❓ **Dúvidas:** decisões a tomar
-  - 🧘 **Desabafos:** sentimentos reescritos com gentileza
-- **Leitura do momento:** síntese acolhedora, nível de carga cognitiva e estado mental.
-- **"Sua mente está X% mais leve":** métrica motivacional (não clínica) baseada no que foi organizado.
-- **Checklist de tarefas:** marque o que já fez, com o progresso salvo no histórico.
-- **Quebrar em passos menores:** a IA divide uma tarefa que parece grande demais em 3 a 5 passos pequenos, começando por um bem fácil.
-- **Apoio quando precisa:** se o texto mostrar sinais de sofrimento intenso, aparece com delicadeza o contato do **CVV (188)**. Um rodapé discreto deixa esse contato sempre à mão.
-- **Copiar apenas tarefas:** uma por linha, prontas para colar no seu app de lista.
-- **Histórico:** os últimos 5 despejos ficam salvos e podem ser reabertos com o progresso.
-- **Login sem senha (opcional):** entre com um link mágico enviado por e-mail para guardar o histórico na nuvem e acessá-lo de outros aparelhos. Sem login, tudo fica só no navegador. Ao entrar, o que já estava no navegador vai para a sua conta.
-- **Pensado para foco:** dark mode suave, sem distrações, animações discretas que respeitam `prefers-reduced-motion`, navegação por teclado e suporte a leitores de tela.
-
-## 🛠️ Tecnologias
-
-| Camada | Tecnologia |
+| | |
 | --- | --- |
-| Backend | Node.js 18+ (ESM), Express 5 |
-| IA | Google Gemini (`gemini-3.8-flash`) via `@google/genai`, com respostas estruturadas por `responseSchema` |
-| Frontend | HTML + JavaScript Vanilla (ES6) + Tailwind CSS via CDN, sem build step |
-| Persistência | Postgres no Supabase (opcional, ambiente de teste) via `pg`, com LocalStorage como cópia e reserva |
+| ✍️ **Escreva sem filtro** | Caixa de texto ampla, contador de caracteres e palavras, atalho **Ctrl + Enter**. |
+| 🎙️ **Fale em vez de digitar** | Ditado por voz em português (Web Speech API), no Chrome e no Edge. |
+| 🗂️ **Organização com IA** | 🔴 Tarefas · 💡 Ideias · ❓ Dúvidas · 🧘 Desabafos, sem itens repetidos. |
+| 💬 **Leitura do momento** | Síntese acolhedora, nível de carga cognitiva e estado mental. |
+| 🪶 **"Sua mente está X% mais leve"** | Métrica motivacional (não clínica) baseada no que foi organizado. |
+| ✅ **Checklist de tarefas** | Marque o que já fez; o progresso fica salvo no histórico. |
+| 🪜 **Quebrar em passos menores** | A IA divide uma tarefa difícil em 3 a 5 passos, começando por um bem fácil. |
+| 💙 **Apoio quando precisa** | Se o texto mostra sofrimento intenso, aparece com delicadeza o contato do **CVV (188)**. |
+| 📋 **Copiar só as tarefas** | Uma por linha, prontas para colar no seu app de lista. |
+| 🔐 **Login sem senha** | Link mágico por e-mail para guardar o histórico na nuvem e abrir em outros aparelhos. Sem login, tudo fica só no navegador. |
+| ♿ **Pensado para foco** | Dark mode suave, sem distrações, navegação por teclado, leitores de tela e `prefers-reduced-motion`. |
+
+## 📸 Capturas de tela
+
+<table>
+  <tr>
+    <td width="60%"><img src="docs/resultado.png" alt="Resultado organizado: síntese acolhedora, métrica de leveza e checklist de tarefas"></td>
+    <td width="40%" rowspan="2" align="center"><img src="docs/celular.png" alt="O resultado no celular, com uma tarefa marcada e outra dividida em passos menores" width="300"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/micro-passos.png" alt="Tarefa dividida em passos menores e cartões de ideias, dúvidas e desabafos"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Resultado organizado e tarefa quebrada em passos menores</sub></td>
+    <td align="center"><sub>Layout responsivo no celular</sub></td>
+  </tr>
+</table>
+
+## 🔄 Como funciona
+
+```mermaid
+flowchart LR
+    U([Pessoa]) -->|texto ou voz| F[Frontend<br/>HTML + JS + Tailwind]
+    F -->|POST /api/organizar| S[Servidor<br/>Node + Express]
+    S -->|prompt + responseSchema| G[Google Gemini]
+    G -->|JSON estruturado| S
+    S -->|sanitiza e confere<br/>sinais de risco| F
+    F <-->|link mágico| A[Supabase Auth]
+    S -->|valida o token| A
+    S <-->|só com login| D[(Postgres<br/>Supabase)]
+    F <-->|sem login| L[(LocalStorage)]
+```
+
+1. O texto vai para o servidor, que monta o prompt e pede ao Gemini uma resposta **no formato exato de um schema** (`responseSchema`).
+2. Se o modelo principal estiver sem cota, sobrecarregado ou lento, o servidor tenta um **modelo reserva** dentro de um prazo total de 30 s.
+3. A resposta é **sanitizada** (só campos esperados, sem vazios nem repetidos) e passa por uma **rede de segurança** que procura expressões explícitas de risco para mostrar o cartão de apoio.
+4. Com login, o despejo é salvo na conta; sem login, fica só no navegador.
+
+## 🧩 Decisões técnicas
+
+- **Saída estruturada, não texto livre.** Todas as respostas da IA usam `responseSchema`, então o frontend nunca precisa "adivinhar" o formato.
+- **Modelo reserva com prazo.** O modelo principal tem 18 s; o que sobrar dos 30 s vai para o reserva. A cota diária esgotada é detectada pelo `quotaId` do erro, para mostrar uma mensagem honesta.
+- **Duas camadas para o cartão de apoio.** A IA marca `sugerir_apoio`, e uma lista de expressões em `lib/apoio.js` cobre o caso de a IA deixar passar, sem disparar em expressões idiomáticas como "vai me matar de rir".
+- **Login sem biblioteca de JWT no servidor.** O token é confirmado no próprio Supabase (`/auth/v1/user`), com cache de 60 s que guarda só o hash do token, nunca o token em si.
+- **Dependências enxutas.** O backend usa só `express`, `@google/genai`, `pg` e `dotenv`. O frontend é JavaScript puro, sem build step.
+- **Injeção de dependências para testar.** `criarApp` recebe a IA, o banco e o login por parâmetro, então os 125 testes rodam com versões falsas, **sem gastar cota nem precisar de banco**.
 
 ## 🚀 Como rodar
 
-**Pré-requisitos:** [Node.js 18+](https://nodejs.org/) e uma chave da API do Gemini, gerada gratuitamente no [Google AI Studio](https://aistudio.google.com/apikey).
+**Pré-requisitos:** [Node.js 18+](https://nodejs.org/) e uma chave da API do Gemini, gratuita no [Google AI Studio](https://aistudio.google.com/apikey).
 
 ```bash
 # 1. Clone o repositório
@@ -48,7 +112,7 @@ cd brain-dump-ai
 # 2. Instale as dependências
 npm install
 
-# 3. Crie o arquivo .env a partir do modelo e coloque sua chave
+# 3. Crie o .env a partir do modelo e coloque sua chave
 cp .env.example .env
 # edite o .env: GEMINI_API_KEY=sua_chave_aqui
 
@@ -56,9 +120,12 @@ cp .env.example .env
 npm run dev
 ```
 
-Abra **http://localhost:3000** no navegador.
+Abra **http://localhost:3000**. Só com a chave do Gemini o app já funciona por completo, com o histórico salvo no navegador.
 
-### Banco de dados (opcional)
+<details>
+<summary><b>🗄️ Banco de dados (opcional)</b></summary>
+
+<br>
 
 Sem banco, o histórico fica só no navegador. Para salvar na nuvem (Supabase, plano gratuito):
 
@@ -70,7 +137,12 @@ Sem banco, o histórico fica só no navegador. Para salvar na nuvem (Supabase, p
    npm run db:setup
    ```
 
-### Login (Supabase Auth)
+</details>
+
+<details>
+<summary><b>🔐 Login com Supabase Auth (opcional)</b></summary>
+
+<br>
 
 O histórico na nuvem só é usado por quem entra com a conta. Para ativar:
 
@@ -87,17 +159,12 @@ O histórico na nuvem só é usado por quem entra com a conta. Para ativar:
 
 > O e-mail padrão do Supabase tem um limite baixo de envios por hora e serve só para testes. Para uso real, configure um SMTP próprio em **Authentication → Emails**.
 
-> ⚠️ **Ambiente de teste:** os despejos são apagados depois de 30 dias. Não use textos reais ou sensíveis.
+</details>
 
-### Testes
+<details>
+<summary><b>🔧 Variáveis de ambiente</b></summary>
 
-```bash
-npm test
-```
-
-Os testes usam o `node:test` (nativo do Node, sem dependências) e substituem o Gemini, o banco e o login por versões falsas, então **não gastam cota da API nem precisam de banco**.
-
-### Variáveis de ambiente
+<br>
 
 | Variável | Obrigatória | Descrição |
 | --- | --- | --- |
@@ -111,9 +178,22 @@ Os testes usam o `node:test` (nativo do Node, sem dependências) e substituem o 
 | `PORT` | Não | Porta do servidor (padrão: `3000`). |
 | `TRUST_PROXY` | Não | Use `1` ao hospedar atrás de um proxy (Render, Railway etc.) para o limitador identificar o IP real. |
 
+</details>
+
+### 🧪 Testes
+
+```bash
+npm test
+```
+
+Os testes usam o `node:test` (nativo do Node, sem dependências) e substituem o Gemini, o banco e o login por versões falsas, então **não gastam cota da API nem precisam de banco**. Cobrem rotas, validação, sanitização da IA, isolamento entre contas, login, importação do histórico e o cartão de apoio.
+
 ## 🔌 API
 
-### `POST /api/organizar`
+<details>
+<summary><b><code>POST /api/organizar</code></b>: organiza um texto</summary>
+
+<br>
 
 **Requisição**
 ```json
@@ -136,15 +216,25 @@ Os testes usam o `node:test` (nativo do Node, sem dependências) e substituem o 
 
 Com banco e login configurados e o cabeçalho `Authorization: Bearer <token>` da sessão, o despejo é salvo na conta e a resposta inclui `"despejo": { "id": "...", "data": "..." }`. Se o token tiver expirado, o resultado vem normalmente, sem salvar, com `"sessao_expirada": true`.
 
-`sugerir_apoio` fica `true` quando há sinais de sofrimento intenso. Isso acontece de duas formas: a IA marca o campo, ou o servidor encontra no texto uma expressão explícita de risco, uma rede de segurança que funciona mesmo que a IA deixe passar.
+`sugerir_apoio` fica `true` quando há sinais de sofrimento intenso: a IA marca o campo, ou o servidor encontra no texto uma expressão explícita de risco.
 
-### `POST /api/micro-passos`
+</details>
 
-Divide uma tarefa em 3 a 5 passos pequenos. Requisição `{ "tarefa": "Declarar o imposto de renda" }` (até 300 caracteres) e resposta `{ "passos": ["Abrir o site da Receita", "..."] }`. Usa o mesmo limite de requisições da organização.
+<details>
+<summary><b><code>POST /api/micro-passos</code></b>: quebra uma tarefa em passos menores</summary>
 
-### Histórico na nuvem
+<br>
 
-Exceto `/api/status`, todas exigem login (`Authorization: Bearer <token>`), e cada conta só acessa os próprios despejos. O servidor confirma o token com o próprio Supabase (`/auth/v1/user`).
+Requisição `{ "tarefa": "Declarar o imposto de renda" }` (até 300 caracteres) e resposta `{ "passos": ["Abrir o site da Receita", "..."] }`. Usa o mesmo limite de requisições da organização.
+
+</details>
+
+<details>
+<summary><b>Histórico na nuvem</b>: rotas que exigem login</summary>
+
+<br>
+
+Exceto `/api/status`, todas exigem login (`Authorization: Bearer <token>`), e cada conta só acessa os próprios despejos.
 
 | Rota | Descrição |
 | --- | --- |
@@ -155,6 +245,8 @@ Exceto `/api/status`, todas exigem login (`Authorization: Bearer <token>`), e ca
 | `DELETE /api/despejos/:id` | Apaga um despejo (204, ou 404 se não existir) |
 | `DELETE /api/despejos` | Apaga todo o histórico da conta (204) |
 
+</details>
+
 **Erros:** sempre no formato `{ "erro": "mensagem amigável" }`.
 
 | Status | Quando |
@@ -163,7 +255,7 @@ Exceto `/api/status`, todas exigem login (`Authorization: Bearer <token>`), e ca
 | 401 | Rota de histórico sem login ou com a sessão expirada |
 | 413 | Texto acima de 10.000 caracteres |
 | 429 | Muitas requisições (limite de 10 por minuto por IP) |
-| 502 / 503 / 504 | A IA respondeu de forma inesperada |
+| 502 / 503 / 504 | A IA (ou o login) respondeu de forma inesperada ou demorou demais |
 | 500 | Erro interno ou de configuração |
 
 ## 🔒 Segurança e privacidade
@@ -172,23 +264,25 @@ Exceto `/api/status`, todas exigem login (`Authorization: Bearer <token>`), e ca
 - **Limite de requisições por IP** protege a cota da API.
 - O texto do usuário é delimitado no prompt e a IA é instruída a **ignorar comandos embutidos** (proteção contra *prompt injection*).
 - A resposta da IA é **validada e sanitizada** no servidor e no navegador.
-- Todo conteúdo da IA é renderizado com `textContent`, **nunca `innerHTML`** (proteção contra XSS).
-- **Sem banco**, o histórico fica só no LocalStorage do navegador e o servidor não armazena o texto.
+- Todo conteúdo da IA e do histórico é renderizado com `textContent`, **nunca `innerHTML`** (proteção contra XSS).
 - **Sem login**, nada é salvo no servidor: o histórico fica só no navegador.
 - **Com login**, a conexão com o banco usa TLS com verificação de certificado, todas as consultas são parametrizadas, cada conta só lê, altera e apaga os próprios despejos, e eles são apagados automaticamente depois de 30 dias. O RLS do Supabase fica ligado para bloquear a API pública.
-- O token de login é verificado no servidor a cada pedido (com cache de 60 s guardando só o hash do token). Ao sair da conta, a cópia do histórico guardada no navegador é apagada.
+- Ao sair da conta, a cópia do histórico guardada no navegador é apagada.
 
-## 📁 Estrutura
+> [!WARNING]
+> **Ambiente de teste:** os despejos na nuvem são apagados depois de 30 dias. Não use textos reais ou sensíveis.
+
+## 📁 Estrutura do projeto
 
 ```
 brain-dump-ai/
 ├── server.js           # Ponto de entrada: configuração e inicialização
 ├── lib/
 │   ├── app.js          # App Express: rotas e tratamento de erros
-│   ├── db.js           # Acesso ao banco (Postgres): salvar, listar, apagar, importar, limpeza
-│   ├── auth.js         # Verificação do login (token do Supabase Auth)
-│   ├── apoio.js        # Rede de segurança do cartão de apoio (CVV)
 │   ├── ia.js           # Integração com o Gemini (prompts, schemas, modelo reserva)
+│   ├── auth.js         # Verificação do login (token do Supabase Auth)
+│   ├── db.js           # Acesso ao banco (Postgres): salvar, listar, apagar, importar, limpeza
+│   ├── apoio.js        # Rede de segurança do cartão de apoio (CVV)
 │   ├── limitador.js    # Limite de requisições por IP (em memória)
 │   └── sanitizar.js    # Limpeza e validação da resposta da IA
 ├── public/
@@ -198,16 +292,31 @@ brain-dump-ai/
 ├── db/schema.sql       # Tabela despejos (aplicada com npm run db:setup)
 ├── scripts/            # Script de configuração do banco
 ├── certs/              # Certificado raiz do Supabase (público)
+├── docs/               # GIF e capturas de tela deste README
 ├── test/               # Testes automatizados (node:test)
 ├── .env.example        # Modelo das variáveis de ambiente
 └── package.json
 ```
 
-## ⚠️ Limitações conhecidas
+## 🚧 Limitações e próximos passos
 
-- No **plano gratuito** do Gemini, a cota diária é pequena. Quando ela acaba, o app avisa e é preciso esperar a renovação ou ativar o faturamento no Google AI Studio.
+**Limitações conhecidas**
+
+- No **plano gratuito** do Gemini, a cota diária é pequena. Quando ela acaba, o app avisa e é preciso esperar a renovação.
 - O **ditado por voz** depende do navegador: funciona no Chrome e no Edge, mas não no Firefox, no Opera e no Brave.
-- O **e-mail do link mágico** usa o servidor padrão do Supabase, com poucos envios por hora. Para muitos usuários, é preciso um SMTP próprio.
-- O limitador de requisições vive na memória do processo: zera ao reiniciar o servidor e não é compartilhado entre várias instâncias.
+- O **e-mail do link mágico** usa o servidor padrão do Supabase, com poucos envios por hora.
+- O limitador de requisições vive na memória do processo: zera ao reiniciar e não é compartilhado entre instâncias.
+
+**Próximos passos**
+
+- [ ] Tailwind compilado (sem CDN)
+- [ ] CI com GitHub Actions
+- [ ] Deploy público
+- [ ] SMTP próprio para o link mágico
+- [ ] Modo demonstração, sem gastar cota da IA
 
 ## 👤 Autor
+
+Feito por **Breno Cardoso**.
+
+[![GitHub](https://img.shields.io/badge/GitHub-Brenosspc-181717?logo=github&logoColor=white)](https://github.com/Brenosspc)
