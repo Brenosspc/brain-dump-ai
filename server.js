@@ -9,8 +9,11 @@ import { GoogleGenAI, Type } from "@google/genai";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const PORT = Number(process.env.PORT) || 3000;
-const MODELO = "gemini-2.5-flash";
+// gemini-2.5-flash não está mais disponível para chaves novas (a API devolve 404).
+const MODELO = "gemini-3.8-flash";
 const LIMITE_CARACTERES = 10_000;
+// O SDK não tem timeout por padrão: sem isso, uma chamada lenta deixa o usuário esperando indefinidamente.
+const TIMEOUT_IA_MS = 25_000;
 
 // Sem chave não há como falar com a IA: aborta logo na inicialização.
 if (!GEMINI_API_KEY) {
@@ -154,6 +157,12 @@ app.post("/api/organizar", async (req, res) => {
         responseSchema: RESPONSE_SCHEMA,
         temperature: 0.4,
         thinkingConfig: { thinkingBudget: 0 },
+        httpOptions: {
+          // Tempo máximo de cada tentativa.
+          timeout: TIMEOUT_IA_MS,
+          // Picos de demanda (503) costumam ser passageiros: tenta mais uma vez antes de desistir.
+          retryOptions: { attempts: 2, httpStatusCodes: [503] },
+        },
       },
     });
   } catch (erro) {
@@ -186,6 +195,14 @@ app.post("/api/organizar", async (req, res) => {
  * O detalhe técnico fica só no console.error.
  */
 function traduzirErroGemini(erro) {
+  // Timeout local (httpOptions) ou prazo estourado do lado do Gemini (504 DEADLINE_EXCEEDED).
+  if (erro?.name === "AbortError" || erro?.name === "TimeoutError" || erro?.status === 504) {
+    return {
+      status: 504,
+      mensagem: "A IA demorou demais para responder. Tente novamente em instantes.",
+    };
+  }
+
   switch (erro?.status) {
     case 429:
       return {
@@ -196,6 +213,11 @@ function traduzirErroGemini(erro) {
       return {
         status: 503,
         mensagem: "A IA está sobrecarregada agora. Tente novamente daqui a pouco.",
+      };
+    case 404:
+      return {
+        status: 500,
+        mensagem: "O modelo de IA configurado no servidor não está disponível. Avise o responsável pelo app.",
       };
     case 400:
     case 403:
@@ -223,6 +245,17 @@ app.use((erro, req, res, next) => {
   return res.status(500).json({ erro: "Erro interno no servidor. Tente novamente." });
 });
 
-app.listen(PORT, () => {
+// No Express 5, falhas ao abrir a porta (ex.: EADDRINUSE) chegam como argumento do callback.
+app.listen(PORT, (erro) => {
+  if (erro) {
+    if (erro.code === "EADDRINUSE") {
+      console.error(
+        `\n[ERRO] A porta ${PORT} já está em uso. Feche o outro servidor ou defina outra PORT no .env.\n`
+      );
+    } else {
+      console.error("[ERRO] Não foi possível iniciar o servidor:", erro);
+    }
+    process.exit(1);
+  }
   console.log(`Brain Dump AI rodando em http://localhost:${PORT}`);
 });
