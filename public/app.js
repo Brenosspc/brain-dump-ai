@@ -16,6 +16,8 @@ const CHAVE_HISTORICO = "brainDumpAI.historico";
 const CHAVE_DISPOSITIVO = "brainDumpAI.dispositivo";
 const MAX_HISTORICO = 5;
 const DURACAO_FEEDBACK_COPIA_MS = 2_000;
+// Agrupa cliques rápidos no checklist num único envio à nuvem.
+const ATRASO_SALVAR_PROGRESSO_MS = 700;
 const PADRAO_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const CATEGORIAS = [
@@ -48,6 +50,7 @@ const el = {
   carregando: $("carregando"),
   resultado: $("resultado"),
   tituloResultado: $("titulo-resultado"),
+  apoio: $("apoio"),
   sintese: $("sintese"),
   tagCarga: $("tag-carga"),
   tagEstado: $("tag-estado"),
@@ -75,8 +78,14 @@ const estado = {
   enviando: false,
   resultadoAtual: null,
   timerCopia: null,
+  // Despejo na tela: { id, naNuvem } e o progresso do checklist
+  despejoAtual: null,
+  progresso: { concluidas: [], micro_passos: {} },
+  timersProgresso: new Map(), // id do despejo -> timer do envio do progresso à nuvem
   // Histórico
   nuvem: false, // o servidor tem banco de dados configurado
+  historicoDaNuvem: false, // a lista exibida veio da nuvem (e não da cópia local)
+  historicoExibido: [], // entradas mostradas no painel, mantidas atualizadas com o progresso
   diasRetencao: 30,
   dispositivoId: "", // identificador anônimo deste navegador (UUID)
   // Voz
@@ -207,7 +216,41 @@ function validarResultado(dados) {
       .map((item) => item.trim());
   }
 
+  // Campo novo: despejos antigos do histórico não têm, e contam como false.
+  resultado.sugerir_apoio = dados.sugerir_apoio === true;
+
   return resultado;
+}
+
+function progressoVazio() {
+  return { concluidas: [], micro_passos: {} };
+}
+
+/**
+ * Valida o progresso de um despejo (tarefas concluídas e micro-passos), no mesmo formato
+ * aceito pelo servidor. Devolve sempre um objeto válido (vazio se a entrada for inválida).
+ */
+function validarProgresso(dados) {
+  const progresso = progressoVazio();
+  if (!dados || typeof dados !== "object" || Array.isArray(dados)) return progresso;
+
+  if (Array.isArray(dados.concluidas)) {
+    const indices = dados.concluidas.filter((n) => Number.isInteger(n) && n >= 0 && n < 100);
+    progresso.concluidas = [...new Set(indices)].sort((a, b) => a - b);
+  }
+
+  const origem = dados.micro_passos;
+  if (origem && typeof origem === "object" && !Array.isArray(origem)) {
+    for (const [chave, passos] of Object.entries(origem)) {
+      if (!/^\d{1,2}$/.test(chave) || !Array.isArray(passos)) continue;
+      const limpos = passos
+        .filter((passo) => typeof passo === "string" && passo.trim())
+        .map((passo) => passo.trim().slice(0, 200))
+        .slice(0, 6);
+      if (limpos.length > 0) progresso.micro_passos[String(Number(chave))] = limpos;
+    }
+  }
+  return progresso;
 }
 
 // ---------------------------------------------------------------------------
@@ -307,8 +350,10 @@ async function enviar() {
   try {
     const { resultado, despejo } = await chamarApi(texto);
     definirEnviando(false);
-    renderizarResultado(resultado, texto);
-    void salvarNoHistorico(texto, resultado, despejo); // atualiza o painel em segundo plano
+    // Usa o id da nuvem quando o servidor salvou; senão, um id local.
+    const id = despejo?.id ?? gerarId();
+    renderizarResultado(resultado, texto, { id, naNuvem: Boolean(despejo) });
+    void salvarNoHistorico(texto, resultado, despejo, id); // atualiza o painel em segundo plano
     mostrarStatus("Pronto! Seus pensamentos foram organizados.");
     focarResultado();
   } catch (erro) {
@@ -367,8 +412,18 @@ function criarCartao({ chave, emoji, titulo }, itens) {
   return secao;
 }
 
-function renderizarResultado(resultado, texto) {
+/**
+ * @param {object} resultado resultado validado
+ * @param {string} texto texto original do despejo
+ * @param {{ id?: string, naNuvem?: boolean, progresso?: object }} [contexto] identificação e progresso salvos
+ */
+function renderizarResultado(resultado, texto, { id = null, naNuvem = false, progresso = null } = {}) {
   estado.resultadoAtual = resultado;
+  estado.despejoAtual = id ? { id, naNuvem } : null;
+  estado.progresso = validarProgresso(progresso);
+
+  // Cartão de apoio (CVV) só quando há sinais de sofrimento intenso.
+  el.apoio.hidden = !resultado.sugerir_apoio;
 
   el.sintese.textContent = resultado.sintese_acolhedora;
   el.tagCarga.textContent = `Carga cognitiva: ${resultado.nivel_carga_cognitiva}`;
@@ -385,9 +440,11 @@ function renderizarResultado(resultado, texto) {
     `Processamos ${formatarNumero(palavras)} ${plural(palavras, "palavra", "palavras")} ` +
     `(${formatarNumero(caracteres)} caracteres) e organizamos em ${itens} ${plural(itens, "item", "itens")}.`;
 
-  // Cartões: só os que têm itens
+  // Cartões: só os que têm itens (o de tarefas vira um checklist)
   const cartoes = CATEGORIAS.filter(({ chave }) => resultado[chave].length > 0).map((categoria) =>
-    criarCartao(categoria, resultado[categoria.chave])
+    categoria.chave === "tarefas"
+      ? criarCartaoTarefas(categoria, resultado.tarefas)
+      : criarCartao(categoria, resultado[categoria.chave])
   );
   if (cartoes.length === 0) {
     const vazio = document.createElement("p");
@@ -396,6 +453,7 @@ function renderizarResultado(resultado, texto) {
     cartoes.push(vazio);
   }
   el.cartoes.replaceChildren(...cartoes);
+  atualizarResumoTarefas({ anunciar: false });
 
   // Botão de copiar só aparece se houver tarefas
   el.botaoCopiar.hidden = resultado.tarefas.length === 0;
@@ -415,6 +473,245 @@ function renderizarResultado(resultado, texto) {
 function focarResultado() {
   el.tituloResultado.focus({ preventScroll: true });
   el.resultado.scrollIntoView({ behavior: reduzMovimento() ? "auto" : "smooth", block: "start" });
+}
+
+// ---------------------------------------------------------------------------
+// Checklist de tarefas e micro-passos
+// ---------------------------------------------------------------------------
+
+function criarCartaoTarefas({ chave, emoji, titulo }, tarefas) {
+  const secao = document.createElement("section");
+  secao.className = "rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:col-span-2";
+  secao.setAttribute("aria-labelledby", `cartao-${chave}`);
+
+  const cabecalho = document.createElement("h3");
+  cabecalho.id = `cartao-${chave}`;
+  cabecalho.className = "flex items-center gap-2 text-base font-semibold text-slate-100";
+
+  const icone = document.createElement("span");
+  icone.setAttribute("aria-hidden", "true");
+  icone.textContent = emoji;
+
+  const nome = document.createElement("span");
+  nome.textContent = titulo;
+
+  const contagem = document.createElement("span");
+  contagem.className = "ml-auto text-xs font-normal text-slate-500";
+  contagem.dataset.contagemTarefas = "";
+
+  cabecalho.append(icone, nome, contagem);
+
+  const lista = document.createElement("ul");
+  lista.className = "mt-3 space-y-3";
+  tarefas.forEach((tarefa, indice) => lista.append(criarItemTarefa(tarefa, indice)));
+
+  const parabens = document.createElement("p");
+  parabens.className = "mt-4 text-sm text-sky-300";
+  parabens.dataset.tarefasConcluidas = "";
+  parabens.hidden = true;
+  parabens.textContent = "Tudo feito por aqui. 🌱 Bom trabalho, no seu ritmo.";
+
+  secao.append(cabecalho, lista, parabens);
+  return secao;
+}
+
+function criarItemTarefa(tarefa, indice) {
+  const li = document.createElement("li");
+  li.className = "tarefa";
+
+  const linha = document.createElement("div");
+  linha.className = "flex items-start gap-3";
+
+  const caixa = document.createElement("input");
+  caixa.type = "checkbox";
+  caixa.id = `tarefa-${indice}`;
+  caixa.className = "mt-1 h-4 w-4 shrink-0 cursor-pointer accent-sky-400";
+  caixa.checked = estado.progresso.concluidas.includes(indice);
+
+  const rotulo = document.createElement("label");
+  rotulo.htmlFor = caixa.id;
+  rotulo.className = "texto-tarefa flex-1 cursor-pointer leading-relaxed text-slate-300";
+  rotulo.textContent = tarefa;
+
+  caixa.addEventListener("change", () => alternarTarefa(indice, caixa.checked, li));
+  li.classList.toggle("concluida", caixa.checked);
+  linha.append(caixa, rotulo);
+
+  const areaPassos = document.createElement("div");
+  areaPassos.className = "pl-7";
+  renderizarAreaPassos(areaPassos, tarefa, indice);
+
+  li.append(linha, areaPassos);
+  return li;
+}
+
+/** Mostra os micro-passos da tarefa ou, se ainda não existirem, o botão para pedi-los. */
+function renderizarAreaPassos(area, tarefa, indice) {
+  const passos = estado.progresso.micro_passos[String(indice)];
+
+  if (passos?.length) {
+    const lista = document.createElement("ol");
+    lista.className = "mt-2 list-decimal space-y-1 pl-5 text-sm leading-relaxed text-slate-400 marker:text-slate-600";
+    lista.setAttribute("aria-label", `Passos menores para: ${tarefa}`);
+    for (const passo of passos) {
+      const item = document.createElement("li");
+      item.textContent = passo;
+      lista.append(item);
+    }
+    area.replaceChildren(lista);
+    return;
+  }
+
+  const botao = document.createElement("button");
+  botao.type = "button";
+  botao.className =
+    "mt-1 rounded px-0.5 text-xs text-sky-300/80 underline-offset-4 hover:text-sky-200 hover:underline disabled:cursor-wait disabled:opacity-60";
+  botao.textContent = "Quebrar em passos menores";
+  botao.setAttribute("aria-label", `Quebrar em passos menores: ${tarefa}`);
+  botao.addEventListener("click", () => pedirMicroPassos(tarefa, indice, area, botao));
+  area.replaceChildren(botao);
+}
+
+function alternarTarefa(indice, marcada, li) {
+  const conjunto = new Set(estado.progresso.concluidas);
+  if (marcada) conjunto.add(indice);
+  else conjunto.delete(indice);
+  estado.progresso.concluidas = [...conjunto].sort((a, b) => a - b);
+
+  li.classList.toggle("concluida", marcada);
+  atualizarResumoTarefas({ anunciar: true });
+  salvarProgresso();
+}
+
+/** Atualiza "X de N feitas" e a mensagem de tudo concluído. */
+function atualizarResumoTarefas({ anunciar }) {
+  const contagem = el.cartoes.querySelector("[data-contagem-tarefas]");
+  const parabens = el.cartoes.querySelector("[data-tarefas-concluidas]");
+  if (!contagem || !parabens) return;
+
+  const total = estado.resultadoAtual?.tarefas.length ?? 0;
+  const feitas = estado.progresso.concluidas.filter((indice) => indice < total).length;
+  contagem.textContent = `${feitas} de ${total} ${plural(total, "feita", "feitas")}`;
+
+  const tudoFeito = total > 0 && feitas === total;
+  const jaMostrava = !parabens.hidden;
+  parabens.hidden = !tudoFeito;
+  if (anunciar && tudoFeito && !jaMostrava) {
+    mostrarStatus("Todas as tarefas concluídas. Bom trabalho!");
+  }
+}
+
+async function chamarMicroPassos(tarefa) {
+  const controle = new AbortController();
+  const timer = setTimeout(() => controle.abort(), TIMEOUT_REQUISICAO_MS);
+
+  let resposta;
+  try {
+    resposta = await fetch("/api/micro-passos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tarefa }),
+      signal: controle.signal,
+    });
+  } catch (erro) {
+    if (erro?.name === "AbortError") throw new ErroAmigavel("A IA demorou demais para responder. Tente de novo.");
+    throw new ErroAmigavel("Não consegui falar com o servidor. Verifique sua conexão e tente novamente.");
+  } finally {
+    clearTimeout(timer);
+  }
+
+  let dados = null;
+  try {
+    dados = await resposta.json();
+  } catch {
+    // Corpo vazio ou não-JSON: tratado abaixo.
+  }
+
+  if (!resposta.ok) {
+    throw new ErroAmigavel(
+      typeof dados?.erro === "string" && dados.erro.trim()
+        ? dados.erro.trim()
+        : "Não consegui dividir essa tarefa agora. Tente de novo."
+    );
+  }
+
+  const passos = Array.isArray(dados?.passos)
+    ? dados.passos.filter((passo) => typeof passo === "string" && passo.trim()).map((passo) => passo.trim())
+    : [];
+  if (passos.length === 0) throw new ErroAmigavel("A resposta veio num formato inesperado. Tente de novo.");
+  return passos.slice(0, 6);
+}
+
+async function pedirMicroPassos(tarefa, indice, area, botao) {
+  if (botao.disabled) return;
+  botao.disabled = true;
+  botao.setAttribute("aria-busy", "true");
+  botao.textContent = "Pensando nos passos…";
+  limparMensagens();
+
+  const despejoAlvo = estado.despejoAtual?.id;
+  try {
+    const passos = await chamarMicroPassos(tarefa);
+    // A pessoa pode ter aberto outro despejo enquanto esperava.
+    if (estado.despejoAtual?.id !== despejoAlvo || !area.isConnected) return;
+
+    estado.progresso.micro_passos[String(indice)] = passos;
+    renderizarAreaPassos(area, tarefa, indice);
+    mostrarStatus(`Pronto: a tarefa foi dividida em ${passos.length} passos menores.`);
+    salvarProgresso();
+  } catch (erro) {
+    if (!area.isConnected) return;
+    botao.disabled = false;
+    botao.removeAttribute("aria-busy");
+    botao.textContent = "Quebrar em passos menores";
+    if (!(erro instanceof ErroAmigavel)) console.error("[Micro-passos] Erro inesperado:", erro);
+    mostrarErro(erro instanceof ErroAmigavel ? erro.message : "Não consegui dividir essa tarefa agora.");
+  }
+}
+
+/**
+ * Salva o progresso do despejo na tela: na cópia local na hora e na nuvem
+ * logo depois (agrupando cliques rápidos).
+ */
+function salvarProgresso() {
+  const alvo = estado.despejoAtual;
+  if (!alvo) return;
+  const progresso = {
+    concluidas: [...estado.progresso.concluidas],
+    micro_passos: { ...estado.progresso.micro_passos },
+  };
+
+  // Mantém o painel de histórico em dia (para "Reabrir" mostrar o progresso atual).
+  const exibido = estado.historicoExibido.find((entrada) => entrada.id === alvo.id);
+  if (exibido) exibido.progresso = progresso;
+
+  // Cópia local
+  const lista = lerHistorico();
+  const local = lista.find((entrada) => entrada.id === alvo.id);
+  if (local) {
+    local.progresso = progresso;
+    gravarHistorico(lista);
+  }
+
+  // Nuvem
+  if (!estado.nuvem || !alvo.naNuvem) return;
+  clearTimeout(estado.timersProgresso.get(alvo.id));
+  estado.timersProgresso.set(
+    alvo.id,
+    setTimeout(() => {
+      estado.timersProgresso.delete(alvo.id);
+      enviarProgressoNuvem(alvo.id, progresso);
+    }, ATRASO_SALVAR_PROGRESSO_MS)
+  );
+}
+
+async function enviarProgressoNuvem(id, progresso) {
+  try {
+    await chamarHistorico("PATCH", `/api/despejos/${encodeURIComponent(id)}`, { progresso });
+  } catch (erro) {
+    console.warn("[Progresso] Não foi possível salvar na nuvem:", erro);
+    mostrarAvisoHistorico("Não consegui salvar o progresso na nuvem; ele ficou salvo neste navegador.");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -478,6 +775,8 @@ async function copiarTarefas() {
 function novoDespejo() {
   pararGravacao();
   estado.resultadoAtual = null;
+  estado.despejoAtual = null;
+  estado.progresso = progressoVazio();
   el.resultado.hidden = true;
   el.cartoes.replaceChildren();
   el.texto.value = "";
@@ -643,7 +942,13 @@ function validarEntradaHistorico(entrada) {
   if (typeof entrada.data !== "string" || Number.isNaN(Date.parse(entrada.data))) return null;
   const resultado = validarResultado(entrada.resultado);
   if (!resultado) return null;
-  return { id: entrada.id, data: entrada.data, texto: entrada.texto.slice(0, LIMITE_CARACTERES), resultado };
+  return {
+    id: entrada.id,
+    data: entrada.data,
+    texto: entrada.texto.slice(0, LIMITE_CARACTERES),
+    resultado,
+    progresso: validarProgresso(entrada.progresso),
+  };
 }
 
 function gravarHistorico(lista) {
@@ -704,15 +1009,19 @@ function obterDispositivoId() {
 }
 
 /** Chama as rotas de histórico com timeout; em erro, lança ErroAmigavel (com o status HTTP). */
-async function chamarHistorico(metodo, caminho) {
+async function chamarHistorico(metodo, caminho, corpo) {
   const controle = new AbortController();
   const timer = setTimeout(() => controle.abort(), TIMEOUT_HISTORICO_MS);
+
+  const headers = { "X-Dispositivo-Id": estado.dispositivoId };
+  if (corpo !== undefined) headers["Content-Type"] = "application/json";
 
   let resposta;
   try {
     resposta = await fetch(caminho, {
       method: metodo,
-      headers: { "X-Dispositivo-Id": estado.dispositivoId },
+      headers,
+      body: corpo === undefined ? undefined : JSON.stringify(corpo),
       signal: controle.signal,
     });
   } catch {
@@ -775,6 +1084,7 @@ async function verificarNuvem() {
 /** Mostra o histórico: da nuvem quando disponível; senão (ou se a nuvem falhar), o do navegador. */
 async function carregarHistorico() {
   mostrarAvisoHistorico("");
+  estado.historicoDaNuvem = false;
   if (!estado.nuvem) {
     renderizarHistorico(lerHistorico());
     return;
@@ -782,6 +1092,7 @@ async function carregarHistorico() {
   try {
     const dados = await chamarHistorico("GET", `/api/despejos?limite=${MAX_HISTORICO}`);
     const lista = Array.isArray(dados?.despejos) ? dados.despejos.map(validarEntradaHistorico).filter(Boolean) : [];
+    estado.historicoDaNuvem = true;
     renderizarHistorico(lista);
   } catch (erro) {
     const motivo = erro instanceof ErroAmigavel ? erro.message : "Não consegui carregar o histórico da nuvem.";
@@ -794,12 +1105,13 @@ async function carregarHistorico() {
  * Registra um despejo recém-organizado. O servidor já salvou na nuvem (quando `despejo` vem
  * preenchido); aqui guardamos a cópia local, com o mesmo id, e atualizamos o painel.
  */
-async function salvarNoHistorico(texto, resultado, despejo) {
+async function salvarNoHistorico(texto, resultado, despejo, id) {
   const entrada = {
-    id: despejo?.id ?? gerarId(),
+    id,
     data: despejo?.data ?? new Date().toISOString(),
     texto,
     resultado,
+    progresso: progressoVazio(),
   };
   const salvouLocal = gravarHistorico(
     [entrada, ...lerHistorico().filter((item) => item.id !== entrada.id)].slice(0, MAX_HISTORICO)
@@ -843,7 +1155,10 @@ function criarItemHistorico(entrada) {
     "rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-slate-600 hover:bg-slate-800";
   botaoReabrir.textContent = "Reabrir";
   botaoReabrir.setAttribute("aria-label", `Reabrir despejo de ${dataFormatada}`);
-  botaoReabrir.addEventListener("click", () => reabrirDespejo(entrada));
+  // Busca a entrada na hora do clique, para pegar o progresso mais recente.
+  botaoReabrir.addEventListener("click", () =>
+    reabrirDespejo(estado.historicoExibido.find((item) => item.id === entrada.id) ?? entrada)
+  );
 
   const botaoApagar = document.createElement("button");
   botaoApagar.type = "button";
@@ -858,6 +1173,7 @@ function criarItemHistorico(entrada) {
 }
 
 function renderizarHistorico(lista) {
+  estado.historicoExibido = lista;
   el.historicoContagem.textContent = `(${lista.length})`;
   el.historicoVazio.hidden = lista.length > 0;
   el.botaoLimparHistorico.hidden = lista.length === 0;
@@ -870,7 +1186,11 @@ function reabrirDespejo(entrada) {
   el.texto.value = entrada.texto;
   atualizarContador();
   limparMensagens();
-  renderizarResultado(entrada.resultado, entrada.texto);
+  renderizarResultado(entrada.resultado, entrada.texto, {
+    id: entrada.id,
+    naNuvem: estado.historicoDaNuvem,
+    progresso: entrada.progresso,
+  });
   mostrarStatus(`Despejo de ${formatarData(entrada.data)} reaberto.`);
   focarResultado();
 }

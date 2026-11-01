@@ -1,7 +1,15 @@
 // Testes da integração com a IA (lib/ia.js), usando um cliente do Gemini falso.
 import { describe, it, before, after, mock } from "node:test";
 import assert from "node:assert/strict";
-import { criarOrganizador, ehCotaDiaria, traduzirErroGemini } from "../lib/ia.js";
+import {
+  criarOrganizador,
+  criarGeradorMicroPassos,
+  ehCotaDiaria,
+  traduzirErroGemini,
+  RESPONSE_SCHEMA,
+  SCHEMA_MICRO_PASSOS,
+  PROMPT_MICRO_PASSOS,
+} from "../lib/ia.js";
 
 /** Erro no formato do SDK: `status` + mensagem com o JSON da API. */
 function erroApi(status, corpoErro = {}) {
@@ -145,6 +153,41 @@ describe("criarOrganizador", () => {
 
     await assert.rejects(organizar("x"), (erro) => erro.status === 503);
     assert.equal(ai.chamadas.length, 1);
+  });
+});
+
+describe("schema da organização", () => {
+  it("exige o campo sugerir_apoio como booleano", () => {
+    assert.equal(RESPONSE_SCHEMA.properties.sugerir_apoio.type, "BOOLEAN");
+    assert.ok(RESPONSE_SCHEMA.required.includes("sugerir_apoio"));
+  });
+});
+
+describe("criarGeradorMicroPassos", () => {
+  before(() => mock.method(console, "warn", () => {}));
+  after(() => mock.restoreAll());
+
+  it("envia a tarefa delimitada, com o prompt e o schema dos micro-passos", async () => {
+    const ai = criarAiFalsa(['{"passos":["Abrir o site"]}']);
+    const gerar = criarGeradorMicroPassos({ ai, modelo: "principal", modeloReserva: "reserva" });
+
+    assert.equal(await gerar("Declarar o imposto"), '{"passos":["Abrir o site"]}');
+    const [{ model, contents, config }] = ai.chamadas;
+    assert.equal(model, "principal");
+    assert.equal(contents, "<tarefa>\nDeclarar o imposto\n</tarefa>");
+    assert.equal(config.systemInstruction, PROMPT_MICRO_PASSOS);
+    assert.equal(config.responseSchema, SCHEMA_MICRO_PASSOS);
+    assert.deepEqual(config.httpOptions.retryOptions, { attempts: 1 });
+  });
+
+  it("também usa o modelo reserva quando o principal falha", async () => {
+    const ai = criarAiFalsa([erroApi(503), '{"passos":["x"]}']);
+    const gerar = criarGeradorMicroPassos({ ai, modelo: "principal", modeloReserva: "reserva" });
+    await gerar("tarefa");
+    assert.deepEqual(
+      ai.chamadas.map((c) => c.model),
+      ["principal", "reserva"]
+    );
   });
 });
 

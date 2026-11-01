@@ -19,8 +19,11 @@ O **Brain Dump AI** foi pensado para pessoas com **TDAH e ansiedade**: você esc
   - 🧘 **Desabafos:** sentimentos reescritos com gentileza
 - **Leitura do momento:** síntese acolhedora, nível de carga cognitiva e estado mental.
 - **"Sua mente está X% mais leve":** métrica motivacional (não clínica) baseada no que foi organizado.
+- **Checklist de tarefas:** marque o que já fez, com o progresso salvo no histórico.
+- **Quebrar em passos menores:** a IA divide uma tarefa que parece grande demais em 3 a 5 passos pequenos, começando por um bem fácil.
+- **Apoio quando precisa:** se o texto mostrar sinais de sofrimento intenso, aparece com delicadeza o contato do **CVV (188)**. Um rodapé discreto deixa esse contato sempre à mão.
 - **Copiar apenas tarefas:** uma por linha, prontas para colar no seu app de lista.
-- **Histórico local:** os últimos 5 despejos ficam salvos **só no seu navegador**, e você pode reabri-los.
+- **Histórico:** os últimos 5 despejos ficam salvos (no navegador ou na nuvem) e podem ser reabertos com o progresso.
 - **Pensado para foco:** dark mode suave, sem distrações, animações discretas que respeitam `prefers-reduced-motion`, navegação por teclado e suporte a leitores de tela.
 
 ## 🛠️ Tecnologias
@@ -106,11 +109,18 @@ Os testes usam o `node:test` (nativo do Node, sem dependências) e substituem o 
   "tarefas": ["Pagar a conta de luz"],
   "ideias": [],
   "duvidas": ["Devo aceitar o freela?"],
-  "desabafos": ["Você está se sentindo cansado hoje, e isso é válido."]
+  "desabafos": ["Você está se sentindo cansado hoje, e isso é válido."],
+  "sugerir_apoio": false
 }
 ```
 
 Com banco configurado e o cabeçalho `X-Dispositivo-Id` (UUID gerado pelo navegador), o despejo é salvo e a resposta inclui `"despejo": { "id": "...", "data": "..." }`.
+
+`sugerir_apoio` fica `true` quando há sinais de sofrimento intenso. Isso acontece de duas formas: a IA marca o campo, ou o servidor encontra no texto uma expressão explícita de risco, uma rede de segurança que funciona mesmo que a IA deixe passar.
+
+### `POST /api/micro-passos`
+
+Divide uma tarefa em 3 a 5 passos pequenos. Requisição `{ "tarefa": "Declarar o imposto de renda" }` (até 300 caracteres) e resposta `{ "passos": ["Abrir o site da Receita", "..."] }`. Usa o mesmo limite de requisições da organização.
 
 ### Histórico na nuvem
 
@@ -120,6 +130,7 @@ Todas exigem o cabeçalho `X-Dispositivo-Id`, e cada navegador só acessa os pr�
 | --- | --- |
 | `GET /api/status` | `{ "nuvem": true, "dias_retencao": 30 }`: informa se o histórico na nuvem está ativo |
 | `GET /api/despejos?limite=5` | Lista os despejos mais recentes (`{ "despejos": [...] }`) |
+| `PATCH /api/despejos/:id` | Salva o progresso: `{ "progresso": { "concluidas": [0, 2], "micro_passos": { "0": ["..."] } } }` |
 | `DELETE /api/despejos/:id` | Apaga um despejo (204, ou 404 se não existir) |
 | `DELETE /api/despejos` | Apaga todo o histórico do navegador (204) |
 
@@ -151,7 +162,8 @@ brain-dump-ai/
 ├── lib/
 │   ├── app.js          # App Express: rotas e tratamento de erros
 │   ├── db.js           # Acesso ao banco (Postgres): salvar, listar, apagar, limpeza
-│   ├── ia.js           # Integração com o Gemini (prompt, schema, modelo reserva)
+│   ├── apoio.js        # Rede de segurança do cartão de apoio (CVV)
+│   ├── ia.js           # Integração com o Gemini (prompts, schemas, modelo reserva)
 │   ├── limitador.js    # Limite de requisições por IP (em memória)
 │   └── sanitizar.js    # Limpeza e validação da resposta da IA
 ├── public/

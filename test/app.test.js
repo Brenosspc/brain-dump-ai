@@ -254,6 +254,149 @@ describe("histórico na nuvem", () => {
   });
 });
 
+describe("fase 3: apoio, micro-passos e progresso", () => {
+  const DISPOSITIVO = "11111111-1111-4111-8111-111111111111";
+  const OUTRO_DISPOSITIVO = "33333333-3333-4333-8333-333333333333";
+  const DESPEJO = "22222222-2222-4222-8222-222222222222";
+
+  let servidor;
+  let respostaOrganizar = RESPOSTA_IA;
+  let comportamentoPassos = async () => '{"passos":["Abrir o site","abrir o site","Fazer login"]}';
+  const tarefasRecebidas = [];
+  const progressosSalvos = new Map(); // `${dispositivo}:${id}` -> progresso
+
+  const repositorio = {
+    async salvar() {
+      return { id: DESPEJO, data: "2026-11-01T12:00:00.000Z" };
+    },
+    async listar() {
+      return [];
+    },
+    async atualizarProgresso(dispositivoId, id, progresso) {
+      if (dispositivoId !== DISPOSITIVO || id !== DESPEJO) return false;
+      progressosSalvos.set(`${dispositivoId}:${id}`, progresso);
+      return true;
+    },
+    async apagar() {
+      return false;
+    },
+    async apagarTodos() {
+      return 0;
+    },
+  };
+
+  function patchProgresso(corpo, dispositivo = DISPOSITIVO, id = DESPEJO) {
+    return fetch(`${servidor.base}/api/despejos/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-Dispositivo-Id": dispositivo },
+      body: JSON.stringify(corpo),
+    });
+  }
+
+  function pedirPassos(corpo) {
+    return fetch(`${servidor.base}/api/micro-passos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(corpo),
+    });
+  }
+
+  before(async () => {
+    mock.method(console, "error", () => {});
+    mock.method(console, "warn", () => {});
+    servidor = await subir({
+      organizar: async () => respostaOrganizar,
+      gerarMicroPassos: async (tarefa) => {
+        tarefasRecebidas.push(tarefa);
+        return comportamentoPassos();
+      },
+      repositorio,
+      limite: { maximo: 1_000, janelaMs: 60_000 },
+    });
+  });
+
+  after(async () => {
+    await servidor.fechar();
+    mock.restoreAll();
+  });
+
+  it("organizar ativa o apoio quando a IA marca sugerir_apoio", async () => {
+    respostaOrganizar = JSON.stringify({ ...JSON.parse(RESPOSTA_IA), sugerir_apoio: true });
+    const dados = await (await organizarPost(servidor.base, { texto: "dia difícil" })).json();
+    assert.equal(dados.sugerir_apoio, true);
+  });
+
+  it("organizar ativa o apoio por expressão de risco, mesmo se a IA não marcar", async () => {
+    respostaOrganizar = JSON.stringify({ ...JSON.parse(RESPOSTA_IA), sugerir_apoio: false });
+    const dados = await (await organizarPost(servidor.base, { texto: "às vezes penso em me matar" })).json();
+    assert.equal(dados.sugerir_apoio, true);
+  });
+
+  it("organizar não ativa o apoio em textos comuns", async () => {
+    respostaOrganizar = RESPOSTA_IA;
+    const dados = await (await organizarPost(servidor.base, { texto: "pagar a luz, tô cansado" })).json();
+    assert.equal(dados.sugerir_apoio, false);
+  });
+
+  it("micro-passos devolve a lista limpa", async () => {
+    const resposta = await pedirPassos({ tarefa: "  Declarar   o imposto " });
+    assert.equal(resposta.status, 200);
+    assert.deepEqual((await resposta.json()).passos, ["Abrir o site", "Fazer login"]);
+    assert.equal(tarefasRecebidas.at(-1), "Declarar o imposto");
+  });
+
+  it("micro-passos recusa tarefa vazia (400) ou longa demais (413)", async () => {
+    assert.equal((await pedirPassos({ tarefa: "   " })).status, 400);
+    assert.equal((await pedirPassos({})).status, 400);
+    assert.equal((await pedirPassos({ tarefa: "x".repeat(301) })).status, 413);
+  });
+
+  it("micro-passos responde 502 quando a IA não devolve passos", async () => {
+    comportamentoPassos = async () => '{"passos":[]}';
+    assert.equal((await pedirPassos({ tarefa: "x" })).status, 502);
+    comportamentoPassos = async () => "não é json";
+    assert.equal((await pedirPassos({ tarefa: "x" })).status, 502);
+  });
+
+  it("micro-passos traduz erros da IA", async () => {
+    comportamentoPassos = async () => {
+      throw Object.assign(new Error("timeout"), { name: "AbortError" });
+    };
+    const resposta = await pedirPassos({ tarefa: "x" });
+    assert.equal(resposta.status, 504);
+    assert.match((await resposta.json()).erro, /demorou demais/);
+  });
+
+  it("salva o progresso sanitizado", async () => {
+    const resposta = await patchProgresso({
+      progresso: { concluidas: [2, 0, 0, -1], micro_passos: { 0: ["Abrir o app"], x: ["?"] }, extra: true },
+    });
+    assert.equal(resposta.status, 200);
+    const esperado = { concluidas: [0, 2], micro_passos: { 0: ["Abrir o app"] } };
+    assert.deepEqual((await resposta.json()).progresso, esperado);
+    assert.deepEqual(progressosSalvos.get(`${DISPOSITIVO}:${DESPEJO}`), esperado);
+  });
+
+  it("recusa progresso inválido (400)", async () => {
+    assert.equal((await patchProgresso({ progresso: "tudo" })).status, 400);
+    assert.equal((await patchProgresso({})).status, 400);
+  });
+
+  it("recusa id de despejo inválido (400)", async () => {
+    assert.equal((await patchProgresso({ progresso: {} }, DISPOSITIVO, "abc")).status, 400);
+  });
+
+  it("outro navegador não altera o progresso (404)", async () => {
+    assert.equal((await patchProgresso({ progresso: { concluidas: [1] } }, OUTRO_DISPOSITIVO)).status, 404);
+  });
+
+  it("recusa progresso grande demais (413)", async () => {
+    const micro_passos = {};
+    for (let i = 0; i < 99; i++) micro_passos[i] = Array.from({ length: 6 }, (_, j) => `${j}`.padEnd(200, "x"));
+    assert.equal((await patchProgresso({ progresso: { micro_passos } })).status, 413);
+  });
+});
+
 describe("sem banco configurado", () => {
   let servidor;
 

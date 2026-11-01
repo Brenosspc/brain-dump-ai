@@ -1,7 +1,14 @@
 // Testes da limpeza da resposta da IA (lib/sanitizar.js).
 import { describe, it, before, after, mock } from "node:test";
 import assert from "node:assert/strict";
-import { limparLista, sanitizarResposta, CATEGORIAS } from "../lib/sanitizar.js";
+import {
+  limparLista,
+  sanitizarResposta,
+  sanitizarPassos,
+  sanitizarProgresso,
+  CATEGORIAS,
+  MAX_PASSOS,
+} from "../lib/sanitizar.js";
 
 describe("limparLista", () => {
   it("remove itens vazios, não-strings e espaços sobrando", () => {
@@ -47,6 +54,7 @@ describe("sanitizarResposta", () => {
       ideias: [],
       duvidas: ["Aceito o freela?"],
       desabafos: ["Cansaço"],
+      sugerir_apoio: false,
     });
   });
 
@@ -64,5 +72,59 @@ describe("sanitizarResposta", () => {
       assert.equal(resposta.nivel_carga_cognitiva, "Moderada");
       assert.deepEqual(resposta.tarefas, []);
     }
+  });
+});
+
+describe("sugerir_apoio", () => {
+  before(() => mock.method(console, "warn", () => {}));
+  after(() => mock.restoreAll());
+
+  it("só é true com um true explícito", () => {
+    assert.equal(sanitizarResposta({ sugerir_apoio: true }).sugerir_apoio, true);
+    for (const valor of [false, "true", 1, null, undefined]) {
+      assert.equal(sanitizarResposta({ sugerir_apoio: valor }).sugerir_apoio, false, String(valor));
+    }
+  });
+});
+
+describe("sanitizarPassos", () => {
+  it("limpa, remove duplicatas e limita a quantidade", () => {
+    const passos = sanitizarPassos({
+      passos: ["  Abrir o site ", "", "abrir o site", 42, "Fazer login", "a", "b", "c", "d", "e"],
+    });
+    assert.equal(passos[0], "Abrir o site");
+    assert.equal(passos[1], "Fazer login");
+    assert.ok(passos.length <= MAX_PASSOS);
+  });
+
+  it("corta passos enormes", () => {
+    const [passo] = sanitizarPassos({ passos: ["x".repeat(1_000)] });
+    assert.equal(passo.length, 200);
+  });
+
+  it("devolve lista vazia para formatos inválidos", () => {
+    assert.deepEqual(sanitizarPassos(null), []);
+    assert.deepEqual(sanitizarPassos({ passos: "texto" }), []);
+  });
+});
+
+describe("sanitizarProgresso", () => {
+  it("mantém só índices válidos, sem repetição e em ordem", () => {
+    const { concluidas } = sanitizarProgresso({ concluidas: [3, 1, 1, -1, 2.5, "2", 100, 0] });
+    assert.deepEqual(concluidas, [0, 1, 3]);
+  });
+
+  it("aceita micro-passos só com chaves numéricas e passos válidos", () => {
+    const { micro_passos } = sanitizarProgresso({
+      micro_passos: { 0: ["Abrir o app"], "01": ["Separar documentos"], abc: ["x"], 2: [], 3: "texto" },
+    });
+    assert.deepEqual(micro_passos, { 0: ["Abrir o app"], 1: ["Separar documentos"] });
+  });
+
+  it("ignora campos extras e devolve null se não for objeto", () => {
+    assert.deepEqual(sanitizarProgresso({ extra: "x" }), { concluidas: [], micro_passos: {} });
+    assert.equal(sanitizarProgresso(null), null);
+    assert.equal(sanitizarProgresso([1, 2]), null);
+    assert.equal(sanitizarProgresso("texto"), null);
   });
 });

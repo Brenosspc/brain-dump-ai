@@ -125,6 +125,17 @@ kbd {
   transition: width 0.8s ease-out;
 }
 
+/* Checklist: tarefa concluída fica riscada e mais apagada. */
+.texto-tarefa {
+  transition: color 0.2s ease;
+}
+
+.tarefa.concluida .texto-tarefa {
+  text-decoration: line-through;
+  text-decoration-color: #475569; /* slate-600 */
+  color: #64748b; /* slate-500 */
+}
+
 /* Painel de histórico: remove o marcador padrão e gira a seta ao abrir. */
 summary {
   list-style: none;
