@@ -5,7 +5,7 @@
 }
 
 body {
-  background-color: #020617; /* slate-950, caso o CDN do Tailwind demore */
+  background-color: #020617; /* slate-950, antes de o CSS carregar */
 }
 
 /* Garante que o atributo hidden vença classes utilitárias como "flex" ou "grid". */

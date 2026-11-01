@@ -1,0 +1,4 @@
+/* Entrada do Tailwind. O resultado (minificado) é gerado em public/tailwind.css com `npm run build:css`. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

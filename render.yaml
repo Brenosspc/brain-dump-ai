@@ -1,0 +1,28 @@
+# Blueprint do Render: cria o serviço web do Brain Dump AI (plano gratuito).
+# As variáveis com "sync: false" são pedidas no painel do Render na criação e nunca ficam no repositório.
+services:
+  - type: web
+    name: brain-dump-ai
+    runtime: node
+    plan: free
+    region: virginia
+    # O CSS do Tailwind já vem compilado no repositório, então só as dependências de produção são instaladas.
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/status
+    # Só publica uma versão nova depois de o CI (testes) passar.
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # O Render fica atrás de um proxy: necessário para o limitador ver o IP real.
+      - key: TRUST_PROXY
+        value: "1"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false

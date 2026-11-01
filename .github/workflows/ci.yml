@@ -1,0 +1,42 @@
+# Integração contínua: roda os testes e confere o CSS do Tailwind a cada push e pull request.
+# Os testes usam versões falsas do Gemini, do banco e do login, então não precisam de nenhuma chave.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    name: Testes (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Rodar os testes
+        run: npm test
+
+      - name: Conferir se o CSS do Tailwind está atualizado
+        if: matrix.node == 22
+        run: |
+          npm run build:css
+          if ! git diff --quiet -- public/tailwind.css; then
+            echo "::error file=public/tailwind.css::O CSS está desatualizado. Rode 'npm run build:css' e faça commit do public/tailwind.css."
+            exit 1
+          fi
