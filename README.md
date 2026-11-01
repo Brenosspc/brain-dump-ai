@@ -1,4 +1,4 @@
-# 🧠 Brain Dump AI
+# 🧠 Brain Dump AI (em andamento)
 
 Despeje tudo o que está na sua cabeça, sem ordem, e deixe a IA organi
 zar.
@@ -113,10 +113,8 @@ empo, e tudo bem se sentir cansado.",
 | --- | --- |
 | 400 | Texto vazio ou JSON inválido |
 | 413 | Texto acima de 10.000 caracteres |
-| 429 | Muitas requisições (limite de 10 por minuto por IP) ou cota d
-iária da IA esgotada |
-| 502 / 503 / 504 | A IA respondeu de forma inesperada, está sobrecar
-regada ou demorou demais |
+| 429 | Muitas requisições (limite de 10 por minuto por IP) |
+| 502 / 503 / 504 | A IA respondeu de forma inesperada |
 | 500 | Erro interno ou de configuração |
 
 ## 🔒 Segurança e privacidade
@@ -160,6 +158,3 @@ Edge, mas não no Firefox, no Opera e no Brave.
 niciar o servidor e não é compartilhado entre várias instâncias.
 
 ## 👤 Autor
-
-Feito por **Breno Cardoso**: [github.com/Brenosspc](https://github.co
-m/Brenosspc)
