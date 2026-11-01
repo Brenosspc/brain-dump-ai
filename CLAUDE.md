@@ -6,7 +6,8 @@ App de brain dump para pessoas com TDAH/ansiedade: o usuário escreve pensamento
 - Backend: Node 18+ (ESM), Express, @google/genai, dotenv. Modelo principal `gemini-3.8-flash` com reserva `gemini-3.5-flash-lite` (o 2.5 não está disponível para chaves novas; Gemini 3.5+ usa `thinkingLevel`, não `thinkingBudget`)
 - Estrutura: `server.js` (configuração) → `lib/app.js` (rotas) + `lib/ia.js` (Gemini)
 - Testes: `npm test` (`node:test`, Gemini simulado, sem gastar cota)
-- Frontend: HTML + JS Vanilla ES6 + Tailwind via CDN, sem build step (`public/`)
+- Frontend: HTML + JS Vanilla ES6 + Tailwind 3.4.17 compilado (`public/`). O `public/tailwind.css` gerado fica versionado: ao mudar classes, rodar `npm run build:css` (o CI falha se estiver desatualizado). Não montar classes dinamicamente (`bg-${x}`)
+- CI: `.github/workflows/ci.yml` (testes no Node 20/22/24). Deploy: `render.yaml` (Render, plano gratuito, só publica após o CI passar)
 - Persistência: Postgres no Supabase (opcional, teste) via `pg` em `lib/db.js`, ligado por `DATABASE_URL`; LocalStorage como cópia/reserva. Schema em `db/schema.sql` (`npm run db:setup`). TLS sempre verificado com `certs/supabase-ca.crt` (nunca `rejectUnauthorized: false`). Login com link mágico (Supabase Auth; supabase-js via CDN jsdelivr no frontend, `SUPABASE_URL`/`SUPABASE_ANON_KEY`): só logado salva na nuvem, despejos filtrados por `usuario_id`; o servidor valida o token em `lib/auth.js` via `/auth/v1/user`. Ao entrar, importa o histórico local (`POST /api/despejos/importar`); ao sair, apaga a cópia local. Retenção de 30 dias
 
 ## Rodar

@@ -11,7 +11,7 @@ Um app de *brain dump* pensado para pessoas com **TDAH e ansiedade**: você escr
 ![Google Gemini](https://img.shields.io/badge/Google%20Gemini-IA-8E75B2?logo=googlegemini&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?logo=supabase&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-UI-06B6D4?logo=tailwindcss&logoColor=white)
-![Testes](https://img.shields.io/badge/testes-125%20passando-brightgreen)
+[![CI](https://github.com/Brenosspc/brain-dump-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/Brenosspc/brain-dump-ai/actions/workflows/ci.yml)
 
 <img src="docs/demo.gif" alt="Demonstração: um texto bagunçado é digitado, a IA o organiza em tarefas, ideias, dúvidas e desabafos, uma tarefa é marcada como feita e outra é quebrada em passos menores" width="760">
 
@@ -97,7 +97,7 @@ flowchart LR
 - **Modelo reserva com prazo.** O modelo principal tem 18 s; o que sobrar dos 30 s vai para o reserva. A cota diária esgotada é detectada pelo `quotaId` do erro, para mostrar uma mensagem honesta.
 - **Duas camadas para o cartão de apoio.** A IA marca `sugerir_apoio`, e uma lista de expressões em `lib/apoio.js` cobre o caso de a IA deixar passar, sem disparar em expressões idiomáticas como "vai me matar de rir".
 - **Login sem biblioteca de JWT no servidor.** O token é confirmado no próprio Supabase (`/auth/v1/user`), com cache de 60 s que guarda só o hash do token, nunca o token em si.
-- **Dependências enxutas.** O backend usa só `express`, `@google/genai`, `pg` e `dotenv`. O frontend é JavaScript puro, sem build step.
+- **Dependências enxutas.** O backend usa só `express`, `@google/genai`, `pg` e `dotenv`. O frontend é JavaScript puro; o único build é o do Tailwind, que gera um CSS de ~14 KB só com as classes usadas (o arquivo gerado fica no repositório, então o app roda sem build).
 - **Injeção de dependências para testar.** `criarApp` recebe a IA, o banco e o login por parâmetro, então os 125 testes rodam com versões falsas, **sem gastar cota nem precisar de banco**.
 
 ## 🚀 Como rodar
@@ -187,6 +187,17 @@ npm test
 ```
 
 Os testes usam o `node:test` (nativo do Node, sem dependências) e substituem o Gemini, o banco e o login por versões falsas, então **não gastam cota da API nem precisam de banco**. Cobrem rotas, validação, sanitização da IA, isolamento entre contas, login, importação do histórico e o cartão de apoio.
+
+O **GitHub Actions** roda os testes no Node 20, 22 e 24 a cada push e pull request, e confere se o CSS do Tailwind está atualizado.
+
+### 🎨 Estilos (Tailwind)
+
+O CSS compilado (`public/tailwind.css`) já vem no repositório. Se você mudar classes no `public/index.html` ou no `public/app.js`, gere de novo:
+
+```bash
+npm run build:css    # uma vez
+npm run watch:css    # recompila sozinho enquanto você edita
+```
 
 ## 🔌 API
 
@@ -287,11 +298,15 @@ brain-dump-ai/
 │   └── sanitizar.js    # Limpeza e validação da resposta da IA
 ├── public/
 │   ├── index.html      # Interface
+│   ├── tailwind.css    # CSS do Tailwind compilado (npm run build:css)
 │   ├── style.css       # Estilos complementares ao Tailwind
 │   └── app.js          # Lógica do frontend (voz, envio, histórico, login)
 ├── db/schema.sql       # Tabela despejos (aplicada com npm run db:setup)
 ├── scripts/            # Script de configuração do banco
 ├── certs/              # Certificado raiz do Supabase (público)
+├── styles/tailwind.css # Entrada do Tailwind
+├── .github/workflows/  # CI (GitHub Actions)
+├── render.yaml         # Deploy no Render (Blueprint)
 ├── docs/               # GIF e capturas de tela deste README
 ├── test/               # Testes automatizados (node:test)
 ├── .env.example        # Modelo das variáveis de ambiente
@@ -309,8 +324,8 @@ brain-dump-ai/
 
 **Próximos passos**
 
-- [ ] Tailwind compilado (sem CDN)
-- [ ] CI com GitHub Actions
+- [x] Tailwind compilado (sem CDN)
+- [x] CI com GitHub Actions
 - [ ] Deploy público
 - [ ] SMTP próprio para o link mágico
 - [ ] Modo demonstração, sem gastar cota da IA
