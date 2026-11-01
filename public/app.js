@@ -519,7 +519,8 @@ function mensagemErroVoz(codigo) {
     case "audio-capture":
       return "Não encontrei um microfone funcionando. Verifique se ele está conectado.";
     case "network":
-      return "O ditado por voz precisa de internet e a conexão falhou. Tente de novo.";
+      // Também é o erro que navegadores sem o serviço de voz do Google costumam devolver.
+      return "Não consegui acessar o serviço de ditado. Verifique a internet ou use o Chrome ou o Edge.";
     case "language-not-supported":
       return "Seu navegador não oferece ditado em português. Você pode digitar normalmente.";
     default:
@@ -527,11 +528,34 @@ function mensagemErroVoz(codigo) {
   }
 }
 
+/**
+ * Opera e Brave expõem webkitSpeechRecognition, mas o reconhecimento não funciona neles
+ * (não têm acesso ao serviço de voz do Google). Devolve o nome do navegador nesses casos.
+ */
+function navegadorSemDitado() {
+  const marcas = navigator.userAgentData?.brands?.map((m) => m.brand) ?? [];
+  if (/\bOPR\/|\bOPX\//.test(navigator.userAgent) || marcas.some((m) => /opera/i.test(m))) return "Opera";
+  if (navigator.brave || marcas.some((m) => /brave/i.test(m))) return "Brave";
+  return null;
+}
+
+function desabilitarVoz(mensagem) {
+  el.botaoMic.disabled = true;
+  el.avisoMic.textContent = mensagem;
+  el.avisoMic.hidden = false;
+}
+
 function configurarVoz() {
   if (!Reconhecimento) {
-    el.botaoMic.disabled = true;
-    el.avisoMic.textContent = "Seu navegador não suporta ditado por voz. Tente o Chrome ou o Edge, ou digite normalmente.";
-    el.avisoMic.hidden = false;
+    desabilitarVoz("Seu navegador não suporta ditado por voz. Tente o Chrome ou o Edge, ou digite normalmente.");
+    return;
+  }
+
+  const semDitado = navegadorSemDitado();
+  if (semDitado) {
+    desabilitarVoz(
+      `O ditado por voz não funciona no ${semDitado}. Para falar em vez de digitar, abra o app no Chrome ou no Edge.`
+    );
     return;
   }
 

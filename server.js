@@ -1,7 +1,7 @@
 // Brain Dump AI — servidor Express que organiza pensamentos soltos com o Gemini.
 import "dotenv/config";
 import express from "express";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { criarLimitador } from "./lib/limitador.js";
 import { sanitizarResposta, NIVEIS_CARGA } from "./lib/sanitizar.js";
 
@@ -166,7 +166,9 @@ app.post("/api/organizar", limitarOrganizar, async (req, res) => {
         responseMimeType: "application/json",
         responseSchema: RESPONSE_SCHEMA,
         temperature: 0.4,
-        thinkingConfig: { thinkingBudget: 0 },
+        // A partir do Gemini 3.5, thinkingBudget não é mais suportado (a chamada travava até o timeout).
+        // Raciocínio baixo basta para categorizar e mantém a resposta rápida.
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
         httpOptions: {
           // Tempo máximo de cada tentativa.
           timeout: TIMEOUT_IA_MS,
@@ -211,6 +213,13 @@ function traduzirErroGemini(erro) {
 
   switch (erro?.status) {
     case 429:
+      // Cota diária esgotada (ex.: plano gratuito): esperar alguns segundos não resolve.
+      if (/PerDay|per day/i.test(String(erro?.message))) {
+        return {
+          status: 429,
+          mensagem: "O limite diário de uso da IA foi atingido. Tente novamente amanhã.",
+        };
+      }
       return {
         status: 429,
         mensagem: "Muitas organizações em pouco tempo. Respire um pouco e tente de novo em alguns instantes.",
