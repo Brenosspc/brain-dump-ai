@@ -1,0 +1,6 @@
+{
+  "permissions": {
+    "deny": ["Read(./.env)", "Read(./.env.*)"],
+    "allow": ["Bash(npm run dev)", "Bash(git status)", "Bash(git diff)"]
+  }
+}

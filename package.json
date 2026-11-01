@@ -1,0 +1,22 @@
+{
+  "name": "brain-dump-ai",
+  "version": "1.0.0",
+  "description": "Brain dump para TDAH/ansiedade: escreva pensamentos sem ordem e a IA (Gemini) organiza em categorias.",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["brain-dump", "tdah", "ansiedade", "gemini", "express"],
+  "author": "Breno Cardoso",
+  "license": "ISC",
+  "dependencies": {
+    "@google/genai": "^2.32.0",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0"
+  }
+}
