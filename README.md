@@ -13,6 +13,10 @@ Um app de *brain dump* pensado para pessoas com **TDAH e ansiedade**: você escr
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-UI-06B6D4?logo=tailwindcss&logoColor=white)
 [![CI](https://github.com/Brenosspc/brain-dump-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/Brenosspc/brain-dump-ai/actions/workflows/ci.yml)
 
+### [🌐 Experimente agora: brain-dump-ai-tomp.onrender.com](https://brain-dump-ai-tomp.onrender.com)
+
+<sub>Hospedado no plano gratuito do Render: o primeiro acesso depois de um tempo parado pode levar até 1 minuto para acordar o servidor.</sub>
+
 <img src="docs/demo.gif" alt="Demonstração: um texto bagunçado é digitado, a IA o organiza em tarefas, ideias, dúvidas e desabafos, uma tarefa é marcada como feita e outra é quebrada em passos menores" width="760">
 
 </div>
@@ -320,13 +324,14 @@ brain-dump-ai/
 - No **plano gratuito** do Gemini, a cota diária é pequena. Quando ela acaba, o app avisa e é preciso esperar a renovação.
 - O **ditado por voz** depende do navegador: funciona no Chrome e no Edge, mas não no Firefox, no Opera e no Brave.
 - O **e-mail do link mágico** usa o servidor padrão do Supabase, com poucos envios por hora.
+- No plano gratuito do Render, o servidor "dorme" depois de 15 minutos sem uso, e o próximo acesso demora um pouco mais.
 - O limitador de requisições vive na memória do processo: zera ao reiniciar e não é compartilhado entre instâncias.
 
 **Próximos passos**
 
 - [x] Tailwind compilado (sem CDN)
 - [x] CI com GitHub Actions
-- [ ] Deploy público
+- [x] Deploy público ([Render](https://brain-dump-ai-tomp.onrender.com))
 - [ ] SMTP próprio para o link mágico
 - [ ] Modo demonstração, sem gastar cota da IA
 
