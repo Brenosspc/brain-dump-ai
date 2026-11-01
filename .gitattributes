@@ -1,0 +1,7 @@
+# Finais de linha padronizados (LF) no repositório, independentemente do sistema.
+* text=auto eol=lf
+
+# Binários: nunca converter
+*.png binary
+*.jpg binary
+*.ico binary
