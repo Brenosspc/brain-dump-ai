@@ -111,6 +111,180 @@ describe("rotas", () => {
   });
 });
 
+describe("histórico na nuvem", () => {
+  const DISPOSITIVO = "11111111-1111-4111-8111-111111111111";
+  const OUTRO_DISPOSITIVO = "33333333-3333-4333-8333-333333333333";
+  const DESPEJO = "22222222-2222-4222-8222-222222222222";
+
+  let servidor;
+  let falharBanco = false;
+  // Repositório falso em memória, que imita o filtro por dispositivo do banco real.
+  const despejos = [];
+  const repositorio = {
+    async salvar({ dispositivoId, texto, resultado }) {
+      if (falharBanco) throw Object.assign(new Error("conexão caiu"), { code: "ECONNRESET" });
+      const despejo = { id: DESPEJO, data: "2026-11-01T12:00:00.000Z" };
+      despejos.unshift({ ...despejo, dispositivoId, texto, resultado });
+      return despejo;
+    },
+    async listar(dispositivoId, limite) {
+      if (falharBanco) throw new Error("conexão caiu");
+      return despejos
+        .filter((d) => d.dispositivoId === dispositivoId)
+        .slice(0, limite)
+        .map(({ id, data, texto, resultado }) => ({ id, data, texto, resultado }));
+    },
+    async apagar(dispositivoId, id) {
+      const indice = despejos.findIndex((d) => d.id === id && d.dispositivoId === dispositivoId);
+      if (indice < 0) return false;
+      despejos.splice(indice, 1);
+      return true;
+    },
+    async apagarTodos(dispositivoId) {
+      const antes = despejos.length;
+      for (let i = despejos.length - 1; i >= 0; i--) if (despejos[i].dispositivoId === dispositivoId) despejos.splice(i, 1);
+      return antes - despejos.length;
+    },
+  };
+
+  const comDispositivo = (id = DISPOSITIVO) => ({ "X-Dispositivo-Id": id });
+
+  before(async () => {
+    mock.method(console, "error", () => {});
+    servidor = await subir({ organizar: async () => RESPOSTA_IA, repositorio, limite: { maximo: 1_000, janelaMs: 60_000 } });
+  });
+
+  after(async () => {
+    await servidor.fechar();
+    mock.restoreAll();
+  });
+
+  it("/api/status informa que a nuvem está ativa", async () => {
+    const dados = await (await fetch(`${servidor.base}/api/status`)).json();
+    assert.equal(dados.nuvem, true);
+    assert.equal(dados.dias_retencao, 30);
+  });
+
+  it("organizar salva o despejo e devolve id e data", async () => {
+    const resposta = await fetch(`${servidor.base}/api/organizar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...comDispositivo() },
+      body: JSON.stringify({ texto: "pagar luz" }),
+    });
+    const dados = await resposta.json();
+    assert.equal(resposta.status, 200);
+    assert.deepEqual(dados.despejo, { id: DESPEJO, data: "2026-11-01T12:00:00.000Z" });
+    assert.deepEqual(dados.tarefas, ["Pagar luz"]);
+    assert.equal(despejos[0].texto, "pagar luz");
+  });
+
+  it("sem identificação do navegador, organiza mas não salva", async () => {
+    const total = despejos.length;
+    const dados = await (await organizarPost(servidor.base, { texto: "oi" })).json();
+    assert.equal(dados.despejo, undefined);
+    assert.equal(despejos.length, total);
+  });
+
+  it("se o banco falhar ao salvar, o usuário ainda recebe o resultado", async () => {
+    falharBanco = true;
+    try {
+      const resposta = await fetch(`${servidor.base}/api/organizar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...comDispositivo() },
+        body: JSON.stringify({ texto: "oi" }),
+      });
+      assert.equal(resposta.status, 200);
+      const dados = await resposta.json();
+      assert.equal(dados.despejo, null);
+      assert.equal(dados.sintese_acolhedora, "Respira fundo.");
+    } finally {
+      falharBanco = false;
+    }
+  });
+
+  it("lista só os despejos do próprio navegador", async () => {
+    const meus = await (await fetch(`${servidor.base}/api/despejos`, { headers: comDispositivo() })).json();
+    assert.equal(meus.despejos.length, 1);
+
+    const deOutro = await (await fetch(`${servidor.base}/api/despejos`, { headers: comDispositivo(OUTRO_DISPOSITIVO) })).json();
+    assert.deepEqual(deOutro.despejos, []);
+  });
+
+  it("recusa identificação ausente ou inválida", async () => {
+    assert.equal((await fetch(`${servidor.base}/api/despejos`)).status, 400);
+    assert.equal((await fetch(`${servidor.base}/api/despejos`, { headers: comDispositivo("nao-e-uuid") })).status, 400);
+  });
+
+  it("responde 503 com mensagem amigável se o banco falhar ao listar", async () => {
+    falharBanco = true;
+    try {
+      const resposta = await fetch(`${servidor.base}/api/despejos`, { headers: comDispositivo() });
+      assert.equal(resposta.status, 503);
+      assert.match((await resposta.json()).erro, /histórico na nuvem/);
+    } finally {
+      falharBanco = false;
+    }
+  });
+
+  it("outro navegador não consegue apagar o despejo", async () => {
+    const resposta = await fetch(`${servidor.base}/api/despejos/${DESPEJO}`, {
+      method: "DELETE",
+      headers: comDispositivo(OUTRO_DISPOSITIVO),
+    });
+    assert.equal(resposta.status, 404);
+    assert.equal(despejos.length, 1);
+  });
+
+  it("recusa id de despejo inválido", async () => {
+    const resposta = await fetch(`${servidor.base}/api/despejos/abc`, { method: "DELETE", headers: comDispositivo() });
+    assert.equal(resposta.status, 400);
+  });
+
+  it("apaga o próprio despejo (204) e depois responde 404", async () => {
+    const url = `${servidor.base}/api/despejos/${DESPEJO}`;
+    assert.equal((await fetch(url, { method: "DELETE", headers: comDispositivo() })).status, 204);
+    assert.equal((await fetch(url, { method: "DELETE", headers: comDispositivo() })).status, 404);
+  });
+
+  it("apaga todo o histórico do navegador", async () => {
+    await repositorio.salvar({ dispositivoId: DISPOSITIVO, texto: "a", resultado: {} });
+    const resposta = await fetch(`${servidor.base}/api/despejos`, { method: "DELETE", headers: comDispositivo() });
+    assert.equal(resposta.status, 204);
+    assert.equal(despejos.filter((d) => d.dispositivoId === DISPOSITIVO).length, 0);
+  });
+});
+
+describe("sem banco configurado", () => {
+  let servidor;
+
+  before(async () => {
+    servidor = await subir({ organizar: async () => RESPOSTA_IA });
+  });
+
+  after(() => servidor.fechar());
+
+  it("/api/status informa que a nuvem está desligada", async () => {
+    assert.equal((await (await fetch(`${servidor.base}/api/status`)).json()).nuvem, false);
+  });
+
+  it("as rotas de histórico respondem 503", async () => {
+    const resposta = await fetch(`${servidor.base}/api/despejos`, {
+      headers: { "X-Dispositivo-Id": "11111111-1111-4111-8111-111111111111" },
+    });
+    assert.equal(resposta.status, 503);
+  });
+
+  it("organizar continua funcionando sem salvar", async () => {
+    const resposta = await fetch(`${servidor.base}/api/organizar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Dispositivo-Id": "11111111-1111-4111-8111-111111111111" },
+      body: JSON.stringify({ texto: "oi" }),
+    });
+    assert.equal(resposta.status, 200);
+    assert.equal((await resposta.json()).despejo, undefined);
+  });
+});
+
 describe("limite de requisições", () => {
   let servidor;
 
