@@ -3,7 +3,9 @@
 App de brain dump para pessoas com TDAH/ansiedade: o usuário escreve pensamentos sem ordem e a IA (Gemini) os organiza em tarefas, ideias, dúvidas e desabafos. Projeto de portfólio.
 
 ## Stack
-- Backend: Node 18+ (ESM), Express, @google/genai (`gemini-3.8-flash`; o 2.5 não está disponível para chaves novas), dotenv
+- Backend: Node 18+ (ESM), Express, @google/genai, dotenv. Modelo principal `gemini-3.8-flash` com reserva `gemini-3.5-flash-lite` (o 2.5 não está disponível para chaves novas; Gemini 3.5+ usa `thinkingLevel`, não `thinkingBudget`)
+- Estrutura: `server.js` (configuração) → `lib/app.js` (rotas) + `lib/ia.js` (Gemini)
+- Testes: `npm test` (`node:test`, Gemini simulado, sem gastar cota)
 - Frontend: HTML + JS Vanilla ES6 + Tailwind via CDN, sem build step (`public/`)
 - Persistência: LocalStorage (sem banco)
 
