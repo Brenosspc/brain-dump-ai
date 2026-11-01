@@ -54,11 +54,21 @@ npm run dev
 
 Abra **http://localhost:3000** no navegador.
 
+### Testes
+
+```bash
+npm test
+```
+
+Os testes usam o `node:test` (nativo do Node, sem dependências) e substituem o Gemini por um cliente falso, então **não gastam cota da API**.
+
 ### Variáveis de ambiente
 
 | Variável | Obrigatória | Descrição |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | Sim | Chave da API do Gemini. Fica só no servidor e nunca é enviada ao navegador. |
+| `GEMINI_MODELO` | Não | Modelo principal (padrão: `gemini-3.8-flash`). |
+| `GEMINI_MODELO_RESERVA` | Não | Modelo usado quando o principal está sem cota, sobrecarregado ou lento (padrão: `gemini-3.5-flash-lite`). Deixe vazio para desligar. |
 | `PORT` | Não | Porta do servidor (padrão: `3000`). |
 | `TRUST_PROXY` | Não | Use `1` ao hospedar atrás de um proxy (Render, Railway etc.) para o limitador identificar o IP real. |
 
@@ -107,14 +117,17 @@ Abra **http://localhost:3000** no navegador.
 
 ```
 brain-dump-ai/
-├── server.js           # Servidor Express e integração com o Gemini
+├── server.js           # Ponto de entrada: configuração e inicialização
 ├── lib/
+│   ├── app.js          # App Express: rotas e tratamento de erros
+│   ├── ia.js           # Integração com o Gemini (prompt, schema, modelo reserva)
 │   ├── limitador.js    # Limite de requisições por IP (em memória)
 │   └── sanitizar.js    # Limpeza e validação da resposta da IA
 ├── public/
 │   ├── index.html      # Interface
 │   ├── style.css       # Estilos complementares ao Tailwind
 │   └── app.js          # Lógica do frontend (voz, envio, histórico)
+├── test/               # Testes automatizados (node:test)
 ├── .env.example        # Modelo das variáveis de ambiente
 └── package.json
 ```

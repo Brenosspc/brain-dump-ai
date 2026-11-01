@@ -8,7 +8,9 @@
 // ---------------------------------------------------------------------------
 
 const LIMITE_CARACTERES = 10_000; // mesmo limite do backend
-const TIMEOUT_REQUISICAO_MS = 40_000; // o servidor espera até 25 s e pode tentar de novo uma vez
+// O servidor gasta no máximo 30 s com a IA (somando o modelo reserva); esperamos um pouco mais,
+// para nunca desistir antes de a resposta chegar.
+const TIMEOUT_REQUISICAO_MS = 35_000;
 const CHAVE_HISTORICO = "brainDumpAI.historico";
 const MAX_HISTORICO = 5;
 const DURACAO_FEEDBACK_COPIA_MS = 2_000;
@@ -291,6 +293,8 @@ async function enviar() {
     focarResultado();
   } catch (erro) {
     definirEnviando(false);
+    // Devolve à tela o resultado anterior, que foi escondido durante o carregamento.
+    if (estado.resultadoAtual) el.resultado.hidden = false;
     if (!(erro instanceof ErroAmigavel)) console.error("[Brain Dump] Erro inesperado:", erro);
     // O texto digitado continua na textarea.
     mostrarErro(erro instanceof ErroAmigavel ? erro.message : "Algo inesperado aconteceu. Tente novamente.");
