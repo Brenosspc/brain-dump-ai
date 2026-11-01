@@ -30,7 +30,7 @@ O **Brain Dump AI** foi pensado para pessoas com **TDAH e ansiedade**: você esc
 | Backend | Node.js 18+ (ESM), Express 5 |
 | IA | Google Gemini (`gemini-3.8-flash`) via `@google/genai`, com respostas estruturadas por `responseSchema` |
 | Frontend | HTML + JavaScript Vanilla (ES6) + Tailwind CSS via CDN, sem build step |
-| Persistência | LocalStorage (sem banco de dados) |
+| Persistência | Postgres no Supabase (opcional, ambiente de teste) via `pg`, com LocalStorage como cópia e reserva |
 
 ## 🚀 Como rodar
 
@@ -54,13 +54,27 @@ npm run dev
 
 Abra **http://localhost:3000** no navegador.
 
+### Banco de dados (opcional)
+
+Sem banco, o histórico fica só no navegador. Para salvar na nuvem (Supabase, plano gratuito):
+
+1. Crie um projeto em [supabase.com](https://supabase.com).
+2. No projeto, clique em **Connect → Direct** e copie a URI (a conexão direta ou o *Session pooler*). Coloque no `.env` como `DATABASE_URL=...`, trocando `[YOUR-PASSWORD]` pela senha do banco (sem os colchetes).
+3. Em **Database → Settings → SSL Configuration**, baixe o certificado e salve como `certs/supabase-ca.crt`. A conexão usa TLS com verificação de certificado.
+4. Crie a tabela:
+   ```bash
+   npm run db:setup
+   ```
+
+> ⚠️ **Ambiente de teste:** não há login. Os despejos ficam ligados a um identificador anônimo do navegador e são apagados depois de 30 dias. Não use textos reais ou sensíveis.
+
 ### Testes
 
 ```bash
 npm test
 ```
 
-Os testes usam o `node:test` (nativo do Node, sem dependências) e substituem o Gemini por um cliente falso, então **não gastam cota da API**.
+Os testes usam o `node:test` (nativo do Node, sem dependências) e substituem o Gemini e o banco por versões falsas, então **não gastam cota da API nem precisam de banco**.
 
 ### Variáveis de ambiente
 
@@ -69,6 +83,8 @@ Os testes usam o `node:test` (nativo do Node, sem dependências) e substituem o 
 | `GEMINI_API_KEY` | Sim | Chave da API do Gemini. Fica só no servidor e nunca é enviada ao navegador. |
 | `GEMINI_MODELO` | Não | Modelo principal (padrão: `gemini-3.8-flash`). |
 | `GEMINI_MODELO_RESERVA` | Não | Modelo usado quando o principal está sem cota, sobrecarregado ou lento (padrão: `gemini-3.5-flash-lite`). Deixe vazio para desligar. |
+| `DATABASE_URL` | Não | String de conexão do Postgres. Sem ela, o histórico fica só no navegador. |
+| `DATABASE_CA_PATH` | Não | Caminho do certificado raiz do banco (padrão: `certs/supabase-ca.crt`). |
 | `PORT` | Não | Porta do servidor (padrão: `3000`). |
 | `TRUST_PROXY` | Não | Use `1` ao hospedar atrás de um proxy (Render, Railway etc.) para o limitador identificar o IP real. |
 
@@ -94,6 +110,19 @@ Os testes usam o `node:test` (nativo do Node, sem dependências) e substituem o 
 }
 ```
 
+Com banco configurado e o cabeçalho `X-Dispositivo-Id` (UUID gerado pelo navegador), o despejo é salvo e a resposta inclui `"despejo": { "id": "...", "data": "..." }`.
+
+### Histórico na nuvem
+
+Todas exigem o cabeçalho `X-Dispositivo-Id`, e cada navegador só acessa os próprios despejos.
+
+| Rota | Descrição |
+| --- | --- |
+| `GET /api/status` | `{ "nuvem": true, "dias_retencao": 30 }`: informa se o histórico na nuvem está ativo |
+| `GET /api/despejos?limite=5` | Lista os despejos mais recentes (`{ "despejos": [...] }`) |
+| `DELETE /api/despejos/:id` | Apaga um despejo (204, ou 404 se não existir) |
+| `DELETE /api/despejos` | Apaga todo o histórico do navegador (204) |
+
 **Erros:** sempre no formato `{ "erro": "mensagem amigável" }`.
 
 | Status | Quando |
@@ -111,7 +140,8 @@ Os testes usam o `node:test` (nativo do Node, sem dependências) e substituem o 
 - O texto do usuário é delimitado no prompt e a IA é instruída a **ignorar comandos embutidos** (proteção contra *prompt injection*).
 - A resposta da IA é **validada e sanitizada** no servidor e no navegador.
 - Todo conteúdo da IA é renderizado com `textContent`, **nunca `innerHTML`** (proteção contra XSS).
-- O histórico fica **só no LocalStorage do seu navegador**. O texto é enviado ao servidor e ao Gemini apenas para ser organizado, e o servidor não o armazena.
+- **Sem banco**, o histórico fica só no LocalStorage do navegador e o servidor não armazena o texto.
+- **Com banco**, a conexão usa TLS com verificação de certificado, todas as consultas são parametrizadas, cada navegador só lê e apaga os próprios despejos, e eles são apagados automaticamente depois de 30 dias. O RLS do Supabase fica ligado para bloquear a API pública.
 
 ## 📁 Estrutura
 
@@ -120,6 +150,7 @@ brain-dump-ai/
 ├── server.js           # Ponto de entrada: configuração e inicialização
 ├── lib/
 │   ├── app.js          # App Express: rotas e tratamento de erros
+│   ├── db.js           # Acesso ao banco (Postgres): salvar, listar, apagar, limpeza
 │   ├── ia.js           # Integração com o Gemini (prompt, schema, modelo reserva)
 │   ├── limitador.js    # Limite de requisições por IP (em memória)
 │   └── sanitizar.js    # Limpeza e validação da resposta da IA
@@ -127,6 +158,9 @@ brain-dump-ai/
 │   ├── index.html      # Interface
 │   ├── style.css       # Estilos complementares ao Tailwind
 │   └── app.js          # Lógica do frontend (voz, envio, histórico)
+├── db/schema.sql       # Tabela despejos (aplicada com npm run db:setup)
+├── scripts/            # Script de configuração do banco
+├── certs/              # Certificado raiz do Supabase (público)
 ├── test/               # Testes automatizados (node:test)
 ├── .env.example        # Modelo das variáveis de ambiente
 └── package.json

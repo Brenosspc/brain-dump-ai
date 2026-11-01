@@ -11,9 +11,12 @@ const LIMITE_CARACTERES = 10_000; // mesmo limite do backend
 // O servidor gasta no máximo 30 s com a IA (somando o modelo reserva); esperamos um pouco mais,
 // para nunca desistir antes de a resposta chegar.
 const TIMEOUT_REQUISICAO_MS = 35_000;
+const TIMEOUT_HISTORICO_MS = 10_000;
 const CHAVE_HISTORICO = "brainDumpAI.historico";
+const CHAVE_DISPOSITIVO = "brainDumpAI.dispositivo";
 const MAX_HISTORICO = 5;
 const DURACAO_FEEDBACK_COPIA_MS = 2_000;
+const PADRAO_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const CATEGORIAS = [
   { chave: "tarefas", emoji: "🔴", titulo: "Tarefas" },
@@ -59,6 +62,7 @@ const el = {
   historicoContagem: $("historico-contagem"),
   historicoVazio: $("historico-vazio"),
   avisoHistorico: $("aviso-historico"),
+  avisoArmazenamento: $("aviso-armazenamento"),
   historicoLista: $("historico-lista"),
   botaoLimparHistorico: $("botao-limpar-historico"),
 };
@@ -71,6 +75,10 @@ const estado = {
   enviando: false,
   resultadoAtual: null,
   timerCopia: null,
+  // Histórico
+  nuvem: false, // o servidor tem banco de dados configurado
+  diasRetencao: 30,
+  dispositivoId: "", // identificador anônimo deste navegador (UUID)
   // Voz
   gravando: false,
   querGravar: false, // o usuário pediu para gravar (usado para reiniciar se o navegador parar sozinho)
@@ -105,11 +113,15 @@ function reduzMovimento() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+/** Gera um UUID v4 (o servidor exige esse formato para ids de despejo e de dispositivo). */
 function gerarId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  // randomUUID só existe em contexto seguro (HTTPS/localhost); fora dele, monta o UUID à mão.
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // versão 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variante RFC 4122
+  const hex = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 /** Junta dois trechos de texto com um espaço entre eles, se necessário. */
@@ -210,7 +222,7 @@ async function chamarApi(texto) {
   try {
     resposta = await fetch("/api/organizar", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Dispositivo-Id": estado.dispositivoId },
       body: JSON.stringify({ texto }),
       signal: controle.signal,
     });
@@ -242,7 +254,15 @@ async function chamarApi(texto) {
   if (!resultado) {
     throw new ErroAmigavel("A resposta veio num formato inesperado. Tente organizar de novo.");
   }
-  return resultado;
+
+  // Quando o servidor salva na nuvem, devolve { id, data } do despejo.
+  const salvo = dados.despejo;
+  const despejo =
+    salvo && PADRAO_UUID.test(salvo.id ?? "") && typeof salvo.data === "string" && !Number.isNaN(Date.parse(salvo.data))
+      ? { id: salvo.id, data: salvo.data }
+      : null;
+
+  return { resultado, despejo };
 }
 
 // ---------------------------------------------------------------------------
@@ -285,10 +305,10 @@ async function enviar() {
   definirEnviando(true);
 
   try {
-    const resultado = await chamarApi(texto);
+    const { resultado, despejo } = await chamarApi(texto);
     definirEnviando(false);
     renderizarResultado(resultado, texto);
-    salvarNoHistorico(texto, resultado);
+    void salvarNoHistorico(texto, resultado, despejo); // atualiza o painel em segundo plano
     mostrarStatus("Pronto! Seus pensamentos foram organizados.");
     focarResultado();
   } catch (erro) {
@@ -613,7 +633,7 @@ function configurarVoz() {
 }
 
 // ---------------------------------------------------------------------------
-// Histórico (LocalStorage)
+// Histórico: na nuvem quando o servidor tem banco, sempre com uma cópia no LocalStorage
 // ---------------------------------------------------------------------------
 
 function validarEntradaHistorico(entrada) {
@@ -636,7 +656,7 @@ function gravarHistorico(lista) {
   }
 }
 
-/** Lê o histórico, descartando entradas corrompidas (e regravando a versão limpa). */
+/** Lê o histórico local, descartando entradas corrompidas (e regravando a versão limpa). */
 function lerHistorico() {
   let bruto;
   try {
@@ -666,18 +686,132 @@ function lerHistorico() {
   return validas;
 }
 
-function salvarNoHistorico(texto, resultado) {
-  const entrada = { id: gerarId(), data: new Date().toISOString(), texto, resultado };
-  const lista = [entrada, ...lerHistorico()].slice(0, MAX_HISTORICO);
-
-  if (gravarHistorico(lista)) {
-    el.avisoHistorico.hidden = true;
-  } else {
-    el.avisoHistorico.textContent =
-      "Não consegui salvar este despejo no histórico do navegador. O resultado continua aqui na tela.";
-    el.avisoHistorico.hidden = false;
+/** Identificador anônimo deste navegador, usado pelo servidor para separar os despejos na nuvem. */
+function obterDispositivoId() {
+  try {
+    const salvo = localStorage.getItem(CHAVE_DISPOSITIVO);
+    if (salvo && PADRAO_UUID.test(salvo)) return salvo;
+  } catch {
+    // LocalStorage indisponível: segue com um identificador só desta aba.
   }
-  renderizarHistorico(lerHistorico());
+  const novo = gerarId();
+  try {
+    localStorage.setItem(CHAVE_DISPOSITIVO, novo);
+  } catch {
+    console.warn("[Histórico] Sem LocalStorage: o histórico na nuvem vale só enquanto esta aba estiver aberta.");
+  }
+  return novo;
+}
+
+/** Chama as rotas de histórico com timeout; em erro, lança ErroAmigavel (com o status HTTP). */
+async function chamarHistorico(metodo, caminho) {
+  const controle = new AbortController();
+  const timer = setTimeout(() => controle.abort(), TIMEOUT_HISTORICO_MS);
+
+  let resposta;
+  try {
+    resposta = await fetch(caminho, {
+      method: metodo,
+      headers: { "X-Dispositivo-Id": estado.dispositivoId },
+      signal: controle.signal,
+    });
+  } catch {
+    throw new ErroAmigavel("Não consegui falar com o servidor para acessar o histórico.");
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (resposta.status === 204) return null;
+
+  let dados = null;
+  try {
+    dados = await resposta.json();
+  } catch {
+    // Corpo vazio ou não-JSON: tratado abaixo.
+  }
+
+  if (!resposta.ok) {
+    const mensagem =
+      typeof dados?.erro === "string" && dados.erro.trim()
+        ? dados.erro.trim()
+        : "Não consegui acessar o histórico na nuvem agora.";
+    const erro = new ErroAmigavel(mensagem);
+    erro.status = resposta.status;
+    throw erro;
+  }
+  return dados;
+}
+
+function mostrarAvisoHistorico(mensagem) {
+  el.avisoHistorico.textContent = mensagem;
+  el.avisoHistorico.hidden = !mensagem;
+}
+
+function atualizarTextoArmazenamento() {
+  el.avisoArmazenamento.textContent = estado.nuvem
+    ? `Modo de teste: seus despejos ficam salvos num banco de dados na nuvem por até ${estado.diasRetencao} dias, ` +
+      "ligados a este navegador (sem login). Não escreva informações reais ou sensíveis."
+    : `Seus últimos ${MAX_HISTORICO} despejos ficam salvos apenas neste navegador. ` +
+      "Se você limpar os dados do navegador ou trocar de aparelho, eles somem.";
+}
+
+/** Pergunta ao servidor se o histórico na nuvem está ativo. */
+async function verificarNuvem() {
+  const controle = new AbortController();
+  const timer = setTimeout(() => controle.abort(), TIMEOUT_HISTORICO_MS);
+  try {
+    const resposta = await fetch("/api/status", { signal: controle.signal });
+    const dados = await resposta.json();
+    estado.nuvem = dados?.nuvem === true;
+    if (Number.isInteger(dados?.dias_retencao)) estado.diasRetencao = dados.dias_retencao;
+  } catch {
+    estado.nuvem = false;
+  } finally {
+    clearTimeout(timer);
+  }
+  atualizarTextoArmazenamento();
+}
+
+/** Mostra o histórico: da nuvem quando disponível; senão (ou se a nuvem falhar), o do navegador. */
+async function carregarHistorico() {
+  mostrarAvisoHistorico("");
+  if (!estado.nuvem) {
+    renderizarHistorico(lerHistorico());
+    return;
+  }
+  try {
+    const dados = await chamarHistorico("GET", `/api/despejos?limite=${MAX_HISTORICO}`);
+    const lista = Array.isArray(dados?.despejos) ? dados.despejos.map(validarEntradaHistorico).filter(Boolean) : [];
+    renderizarHistorico(lista);
+  } catch (erro) {
+    const motivo = erro instanceof ErroAmigavel ? erro.message : "Não consegui carregar o histórico da nuvem.";
+    mostrarAvisoHistorico(`${motivo} Mostrando o que está salvo neste navegador.`);
+    renderizarHistorico(lerHistorico());
+  }
+}
+
+/**
+ * Registra um despejo recém-organizado. O servidor já salvou na nuvem (quando `despejo` vem
+ * preenchido); aqui guardamos a cópia local, com o mesmo id, e atualizamos o painel.
+ */
+async function salvarNoHistorico(texto, resultado, despejo) {
+  const entrada = {
+    id: despejo?.id ?? gerarId(),
+    data: despejo?.data ?? new Date().toISOString(),
+    texto,
+    resultado,
+  };
+  const salvouLocal = gravarHistorico(
+    [entrada, ...lerHistorico().filter((item) => item.id !== entrada.id)].slice(0, MAX_HISTORICO)
+  );
+
+  await carregarHistorico();
+
+  if (estado.nuvem && !despejo) {
+    mostrarAvisoHistorico("Não consegui salvar este despejo na nuvem; ele ficou salvo só neste navegador.");
+  } else if (!estado.nuvem && !salvouLocal) {
+    mostrarAvisoHistorico("Não consegui salvar este despejo no histórico do navegador. O resultado continua aqui na tela.");
+  }
 }
 
 function criarItemHistorico(entrada) {
@@ -700,15 +834,26 @@ function criarItemHistorico(entrada) {
 
   info.append(quando, resumo);
 
-  const botao = document.createElement("button");
-  botao.type = "button";
-  botao.className =
-    "shrink-0 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-slate-600 hover:bg-slate-800";
-  botao.textContent = "Reabrir";
-  botao.setAttribute("aria-label", `Reabrir despejo de ${dataFormatada}`);
-  botao.addEventListener("click", () => reabrirDespejo(entrada));
+  const acoes = document.createElement("div");
+  acoes.className = "flex shrink-0 items-center gap-1";
 
-  li.append(info, botao);
+  const botaoReabrir = document.createElement("button");
+  botaoReabrir.type = "button";
+  botaoReabrir.className =
+    "rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-slate-600 hover:bg-slate-800";
+  botaoReabrir.textContent = "Reabrir";
+  botaoReabrir.setAttribute("aria-label", `Reabrir despejo de ${dataFormatada}`);
+  botaoReabrir.addEventListener("click", () => reabrirDespejo(entrada));
+
+  const botaoApagar = document.createElement("button");
+  botaoApagar.type = "button";
+  botaoApagar.className = "rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:bg-slate-800 hover:text-rose-200";
+  botaoApagar.textContent = "Apagar";
+  botaoApagar.setAttribute("aria-label", `Apagar despejo de ${dataFormatada}`);
+  botaoApagar.addEventListener("click", () => apagarDespejo(entrada));
+
+  acoes.append(botaoReabrir, botaoApagar);
+  li.append(info, acoes);
   return li;
 }
 
@@ -730,17 +875,51 @@ function reabrirDespejo(entrada) {
   focarResultado();
 }
 
-function limparHistorico() {
-  const confirmou = window.confirm("Apagar todo o histórico deste navegador? Isso não pode ser desfeito.");
-  if (!confirmou) return;
+async function apagarDespejo(entrada) {
+  const dataFormatada = formatarData(entrada.data);
+  if (!window.confirm(`Apagar o despejo de ${dataFormatada}? Isso não pode ser desfeito.`)) return;
+
+  limparMensagens();
+  if (estado.nuvem) {
+    try {
+      await chamarHistorico("DELETE", `/api/despejos/${encodeURIComponent(entrada.id)}`);
+    } catch (erro) {
+      // 404: já não existe na nuvem; segue apagando a cópia local.
+      if (erro.status !== 404) {
+        mostrarErro(erro instanceof ErroAmigavel ? erro.message : "Não consegui apagar agora. Tente de novo.");
+        return;
+      }
+    }
+  }
+
+  gravarHistorico(lerHistorico().filter((item) => item.id !== entrada.id));
+  await carregarHistorico();
+  mostrarStatus(`Despejo de ${dataFormatada} apagado.`);
+  el.painelHistorico.querySelector("summary").focus();
+}
+
+async function limparHistorico() {
+  const pergunta = estado.nuvem
+    ? "Apagar todo o histórico deste navegador, inclusive o que está salvo na nuvem? Isso não pode ser desfeito."
+    : "Apagar todo o histórico deste navegador? Isso não pode ser desfeito.";
+  if (!window.confirm(pergunta)) return;
+
+  limparMensagens();
+  if (estado.nuvem) {
+    try {
+      await chamarHistorico("DELETE", "/api/despejos");
+    } catch (erro) {
+      mostrarErro(erro instanceof ErroAmigavel ? erro.message : "Não consegui apagar o histórico agora. Tente de novo.");
+      return;
+    }
+  }
 
   try {
     localStorage.removeItem(CHAVE_HISTORICO);
   } catch (erro) {
     console.warn("[Histórico] Não foi possível apagar:", erro);
   }
-  el.avisoHistorico.hidden = true;
-  renderizarHistorico(lerHistorico());
+  await carregarHistorico();
   mostrarStatus("Histórico apagado.");
   el.painelHistorico.querySelector("summary").focus();
 }
@@ -784,7 +963,12 @@ function iniciar() {
 
   configurarVoz();
   atualizarContador();
+
+  // Histórico: mostra logo a cópia local e, se o servidor tiver banco, troca pela da nuvem.
+  estado.dispositivoId = obterDispositivoId();
+  atualizarTextoArmazenamento();
   renderizarHistorico(lerHistorico());
+  verificarNuvem().then(carregarHistorico);
 }
 
 iniciar();

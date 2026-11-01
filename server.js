@@ -1,9 +1,11 @@
 // Brain Dump AI — ponto de entrada: lê a configuração, cria o cliente do Gemini e sobe o servidor.
 // As rotas ficam em lib/app.js e a integração com a IA em lib/ia.js.
 import "dotenv/config";
+import { fileURLToPath } from "node:url";
 import { GoogleGenAI } from "@google/genai";
 import { criarApp } from "./lib/app.js";
 import { criarOrganizador } from "./lib/ia.js";
+import { criarPool, criarRepositorio, iniciarLimpezaPeriodica } from "./lib/db.js";
 
 // ---------------------------------------------------------------------------
 // Configuração
@@ -45,7 +47,31 @@ const organizar = criarOrganizador({
   timeoutPrincipalMs: TIMEOUT_PRINCIPAL_MS,
 });
 
-const app = criarApp({ organizar, trustProxy: process.env.TRUST_PROXY });
+// ---------------------------------------------------------------------------
+// Banco de dados (opcional): sem DATABASE_URL, o histórico fica só no navegador.
+// ---------------------------------------------------------------------------
+
+// Certificado raiz do provedor (Supabase), para verificar o TLS da conexão.
+const CAMINHO_CA_BANCO =
+  process.env.DATABASE_CA_PATH || fileURLToPath(new URL("./certs/supabase-ca.crt", import.meta.url));
+
+let repositorio = null;
+if (process.env.DATABASE_URL) {
+  try {
+    repositorio = criarRepositorio(criarPool({ url: process.env.DATABASE_URL, caminhoCa: CAMINHO_CA_BANCO }));
+    repositorio
+      .verificar()
+      .then(() => console.log("[Banco] Conectado: histórico na nuvem ativo."))
+      // Só código e mensagem: a string de conexão nunca é impressa.
+      .catch((erro) => console.error("[Banco] Não consegui conectar:", erro.code ?? "", erro.message));
+    iniciarLimpezaPeriodica(repositorio);
+  } catch (erro) {
+    console.error("[Banco] DATABASE_URL inválida; seguindo sem histórico na nuvem.", erro.message);
+    repositorio = null;
+  }
+}
+
+const app = criarApp({ organizar, repositorio, trustProxy: process.env.TRUST_PROXY });
 
 // No Express 5, falhas ao abrir a porta (ex.: EADDRINUSE) chegam como argumento do callback.
 app.listen(PORT, (erro) => {
