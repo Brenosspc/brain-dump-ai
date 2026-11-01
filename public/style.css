@@ -89,19 +89,80 @@ kbd {
   }
 }
 
-/* Skeleton: brilho lento e suave. */
-.skeleton {
-  background: linear-gradient(90deg, #0f172a 25%, #1e293b 50%, #0f172a 75%);
-  background-size: 200% 100%;
-  animation: brilho 2s ease-in-out infinite;
+/* Caixa de texto que cresce com o conteúdo (a altura é ajustada no app.js). */
+.caixa-texto {
+  min-height: 9.5rem;
+  max-height: 28rem;
+  overflow-y: auto;
 }
 
-@keyframes brilho {
-  from {
-    background-position: 100% 0;
+/* Carregamento: círculo de respiração (4 s inspirando, 4 s expirando). */
+.respiracao-circulo {
+  background: radial-gradient(circle at 35% 30%, rgb(129 140 248 / 0.55), rgb(45 212 191 / 0.25) 70%);
+  box-shadow: 0 0 40px rgb(99 102 241 / 0.25);
+  animation: respirar 8s ease-in-out infinite;
+}
+
+.respiracao-halo {
+  border: 1px solid rgb(129 140 248 / 0.25);
+  animation: respirar-halo 8s ease-in-out infinite;
+}
+
+.respiracao-inspire {
+  animation: texto-inspire 8s ease-in-out infinite;
+}
+
+.respiracao-expire {
+  animation: texto-expire 8s ease-in-out infinite;
+}
+
+@keyframes respirar {
+  0%,
+  100% {
+    transform: scale(0.72);
   }
-  to {
-    background-position: -100% 0;
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+@keyframes respirar-halo {
+  0%,
+  100% {
+    transform: scale(0.85);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+}
+
+@keyframes texto-inspire {
+  0%,
+  42% {
+    opacity: 1;
+  }
+  50%,
+  92% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes texto-expire {
+  0%,
+  42% {
+    opacity: 0;
+  }
+  50%,
+  92% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }
 
@@ -125,9 +186,47 @@ kbd {
   transition: width 0.8s ease-out;
 }
 
+/* Cartões do resultado entram um depois do outro. */
+.cartao {
+  animation: surgir 0.4s ease-out both;
+}
+
+.cartao:nth-child(2) {
+  animation-delay: 0.06s;
+}
+
+.cartao:nth-child(3) {
+  animation-delay: 0.12s;
+}
+
+.cartao:nth-child(4) {
+  animation-delay: 0.18s;
+}
+
 /* Checklist: tarefa concluída fica riscada e mais apagada. */
 .texto-tarefa {
   transition: color 0.2s ease;
+}
+
+/* Pequena comemoração ao marcar uma tarefa. */
+.tarefa.comemorar input[type="checkbox"] {
+  animation: marcar 0.45s ease-out;
+}
+
+@keyframes marcar {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.parabens:not([hidden]) {
+  animation: surgir 0.4s ease-out;
 }
 
 .tarefa.concluida .texto-tarefa {
@@ -164,9 +263,20 @@ summary::-webkit-details-marker {
     scroll-behavior: auto !important;
   }
 
-  .skeleton {
+  /* Respiração parada: círculo estático e só o convite em texto. */
+  .respiracao-circulo,
+  .respiracao-halo {
     animation: none;
-    background: #1e293b;
+  }
+
+  .respiracao-inspire {
+    animation: none;
+    opacity: 1;
+  }
+
+  .respiracao-expire {
+    animation: none;
+    opacity: 0;
   }
 
   /* Sem pulso: o estado de gravação continua visível pela cor e pelo anel fixo. */

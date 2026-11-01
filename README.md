@@ -17,7 +17,7 @@ Um app de *brain dump* pensado para pessoas com **TDAH e ansiedade**: você escr
 
 <sub>Hospedado no plano gratuito do Render: o primeiro acesso depois de um tempo parado pode levar até 1 minuto para acordar o servidor.</sub>
 
-<img src="docs/demo.gif" alt="Demonstração: um texto bagunçado é digitado, a IA o organiza em tarefas, ideias, dúvidas e desabafos, uma tarefa é marcada como feita e outra é quebrada em passos menores" width="760">
+<img src="docs/demo.gif" alt="Demonstração: um texto bagunçado é digitado, a IA o organiza em tarefas, ideias, dúvidas e desabafos com cores próprias, uma tarefa é marcada como feita (a barra de progresso enche) e outra é quebrada em passos menores" width="760">
 
 </div>
 
@@ -47,31 +47,46 @@ O Brain Dump AI inverte a ordem: **primeiro você esvazia a cabeça, do jeito qu
 
 | | |
 | --- | --- |
-| ✍️ **Escreva sem filtro** | Caixa de texto ampla, contador de caracteres e palavras, atalho **Ctrl + Enter**. |
+| ✨ **Ver um exemplo pronto** | Um clique mostra o app funcionando com um despejo de exemplo, **sem chamar a IA nem gastar cota**. |
+| ✍️ **Escreva sem filtro** | Caixa de texto que cresce com o que você escreve, contador de caracteres e palavras, atalho **Ctrl + Enter**. |
 | 🎙️ **Fale em vez de digitar** | Ditado por voz em português (Web Speech API), no Chrome e no Edge. |
-| 🗂️ **Organização com IA** | 🔴 Tarefas · 💡 Ideias · ❓ Dúvidas · 🧘 Desabafos, sem itens repetidos. |
+| 🗂️ **Organização com IA** | 📝 Tarefas · 💡 Ideias · ❓ Dúvidas · 🧘 Desabafos, cada categoria com a sua cor e sem itens repetidos. |
+| 🫁 **Respire enquanto espera** | Enquanto a IA trabalha, um círculo de respiração convida a inspirar e expirar com calma. |
 | 💬 **Leitura do momento** | Síntese acolhedora, nível de carga cognitiva e estado mental. |
 | 🪶 **"Sua mente está X% mais leve"** | Métrica motivacional (não clínica) baseada no que foi organizado. |
-| ✅ **Checklist de tarefas** | Marque o que já fez; o progresso fica salvo no histórico. |
+| ✅ **Checklist de tarefas** | Marque o que já fez, com uma pequena comemoração e uma barra de progresso; tudo fica salvo no histórico. |
 | 🪜 **Quebrar em passos menores** | A IA divide uma tarefa difícil em 3 a 5 passos, começando por um bem fácil. |
 | 💙 **Apoio quando precisa** | Se o texto mostra sofrimento intenso, aparece com delicadeza o contato do **CVV (188)**. |
 | 📋 **Copiar só as tarefas** | Uma por linha, prontas para colar no seu app de lista. |
 | 🔐 **Login sem senha** | Link mágico por e-mail para guardar o histórico na nuvem e abrir em outros aparelhos. Sem login, tudo fica só no navegador. |
-| ♿ **Pensado para foco** | Dark mode suave, sem distrações, navegação por teclado, leitores de tela e `prefers-reduced-motion`. |
+| 📚 **Histórico com prévia** | Os últimos despejos mostram quantas tarefas, ideias e dúvidas tinham, e quantas tarefas já foram feitas. |
+| ♿ **Pensado para foco** | Fonte **Lexend** (criada para facilitar a leitura), dark mode suave, navegação por teclado, leitores de tela e `prefers-reduced-motion`. |
 
 ## 📸 Capturas de tela
 
 <table>
   <tr>
-    <td width="60%"><img src="docs/resultado.png" alt="Resultado organizado: síntese acolhedora, métrica de leveza e checklist de tarefas"></td>
+    <td colspan="2"><img src="docs/tela-inicial.png" alt="Tela inicial: logo, os três passos de como funciona, botão de exemplo pronto e a caixa de texto"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><sub>Tela inicial: o que o app faz em três passos e um exemplo pronto a um clique</sub></td>
+  </tr>
+  <tr>
+    <td width="60%"><img src="docs/resultado.png" alt="Resultado organizado: síntese acolhedora, métrica de leveza e checklist de tarefas com barra de progresso"></td>
     <td width="40%" rowspan="2" align="center"><img src="docs/celular.png" alt="O resultado no celular, com uma tarefa marcada e outra dividida em passos menores" width="300"></td>
   </tr>
   <tr>
-    <td><img src="docs/micro-passos.png" alt="Tarefa dividida em passos menores e cartões de ideias, dúvidas e desabafos"></td>
+    <td><img src="docs/micro-passos.png" alt="Tarefa dividida em passos menores e cartões coloridos de ideias, dúvidas e desabafos"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Resultado organizado e tarefa quebrada em passos menores</sub></td>
+    <td align="center"><sub>Resultado com cores por categoria e tarefa quebrada em passos menores</sub></td>
     <td align="center"><sub>Layout responsivo no celular</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/respiracao.png" alt="Círculo de respiração com o texto Inspire, exibido enquanto a IA organiza" width="560"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><sub>Enquanto a IA trabalha: um convite para respirar</sub></td>
   </tr>
 </table>
 
@@ -101,7 +116,9 @@ flowchart LR
 - **Modelo reserva com prazo.** O modelo principal tem 18 s; o que sobrar dos 30 s vai para o reserva. A cota diária esgotada é detectada pelo `quotaId` do erro, para mostrar uma mensagem honesta.
 - **Duas camadas para o cartão de apoio.** A IA marca `sugerir_apoio`, e uma lista de expressões em `lib/apoio.js` cobre o caso de a IA deixar passar, sem disparar em expressões idiomáticas como "vai me matar de rir".
 - **Login sem biblioteca de JWT no servidor.** O token é confirmado no próprio Supabase (`/auth/v1/user`), com cache de 60 s que guarda só o hash do token, nunca o token em si.
-- **Dependências enxutas.** O backend usa só `express`, `@google/genai`, `pg` e `dotenv`. O frontend é JavaScript puro; o único build é o do Tailwind, que gera um CSS de ~14 KB só com as classes usadas (o arquivo gerado fica no repositório, então o app roda sem build).
+- **Dependências enxutas.** O backend usa só `express`, `@google/genai`, `pg` e `dotenv`. O frontend é JavaScript puro; o único build é o do Tailwind, que gera um CSS de ~17 KB só com as classes usadas (o arquivo gerado fica no repositório, então o app roda sem build).
+- **Design com propósito.** A fonte Lexend foi criada para facilitar a leitura; o loader de respiração troca a espera ansiosa por uma pausa; cada categoria tem uma cor fixa para o olho achar rápido o que procura. Todas as animações são desligadas para quem prefere menos movimento.
+- **Exemplo sem gastar cota.** O "Ver um exemplo pronto" usa um resultado (e micro-passos) embutidos no frontend: quem visita vê o app inteiro funcionando sem consumir a cota diária do Gemini.
 - **Injeção de dependências para testar.** `criarApp` recebe a IA, o banco e o login por parâmetro, então os 125 testes rodam com versões falsas, **sem gastar cota nem precisar de banco**.
 
 ## 🚀 Como rodar
@@ -303,6 +320,8 @@ brain-dump-ai/
 ├── public/
 │   ├── index.html      # Interface
 │   ├── tailwind.css    # CSS do Tailwind compilado (npm run build:css)
+│   ├── favicon.svg     # Logo (ícone da aba)
+│   ├── og.png          # Prévia do link em redes sociais
 │   ├── style.css       # Estilos complementares ao Tailwind
 │   └── app.js          # Lógica do frontend (voz, envio, histórico, login)
 ├── db/schema.sql       # Tabela despejos (aplicada com npm run db:setup)
@@ -333,7 +352,7 @@ brain-dump-ai/
 - [x] CI com GitHub Actions
 - [x] Deploy público ([Render](https://brain-dump-ai-tomp.onrender.com))
 - [ ] SMTP próprio para o link mágico
-- [ ] Modo demonstração, sem gastar cota da IA
+- [x] Modo demonstração (exemplo pronto), sem gastar cota da IA
 
 ## 👤 Autor
 
