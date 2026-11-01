@@ -2,6 +2,8 @@
 import "dotenv/config";
 import express from "express";
 import { GoogleGenAI, Type } from "@google/genai";
+import { criarLimitador } from "./lib/limitador.js";
+import { sanitizarResposta, NIVEIS_CARGA } from "./lib/sanitizar.js";
 
 // ---------------------------------------------------------------------------
 // Configuração
@@ -69,7 +71,7 @@ const RESPONSE_SCHEMA = {
     },
     nivel_carga_cognitiva: {
       type: Type.STRING,
-      enum: ["Baixa", "Moderada", "Alta", "Muito Alta"],
+      enum: NIVEIS_CARGA,
       description: "Estimativa da carga cognitiva expressa no texto.",
     },
     estado_mental: {
@@ -117,18 +119,26 @@ const RESPONSE_SCHEMA = {
   ],
 };
 
-const CATEGORIAS = ["tarefas", "ideias", "duvidas", "desabafos"];
-
 // ---------------------------------------------------------------------------
 // App Express
 // ---------------------------------------------------------------------------
 
 const app = express();
 
+// Atrás de um proxy (Render, Railway etc.), defina TRUST_PROXY=1 no ambiente para que
+// req.ip seja o IP real do usuário. Localmente fica desligado, para que o cabeçalho
+// X-Forwarded-For não possa ser forjado para escapar do limitador.
+if (process.env.TRUST_PROXY) {
+  app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
+}
+
+// Até 10 organizações por minuto por IP: protege a cota da chave do Gemini.
+const limitarOrganizar = criarLimitador({ maximo: 10, janelaMs: 60_000 });
+
 app.use(express.json({ limit: "100kb" }));
 app.use(express.static("public"));
 
-app.post("/api/organizar", async (req, res) => {
+app.post("/api/organizar", limitarOrganizar, async (req, res) => {
   // 1) Validação da entrada
   const texto = typeof req.body?.texto === "string" ? req.body.texto.trim() : "";
 
@@ -182,12 +192,8 @@ app.post("/api/organizar", async (req, res) => {
     });
   }
 
-  // Garantia extra: categorias sempre como arrays de string.
-  for (const categoria of CATEGORIAS) {
-    if (!Array.isArray(dados[categoria])) dados[categoria] = [];
-  }
-
-  return res.json(dados);
+  // 4) Limpeza: só campos do schema, sem itens vazios ou duplicados.
+  return res.json(sanitizarResposta(dados));
 });
 
 /**
