@@ -16,6 +16,15 @@ create table if not exists public.despejos (
 alter table public.despejos
   add column if not exists progresso jsonb not null default '{}'::jsonb;
 
+-- Dono do despejo (login com Supabase Auth). Despejos sem dono são do período sem login e só
+-- podem ser vinculados a uma conta pelo navegador que os criou. Ao apagar a conta, os despejos vão junto.
+alter table public.despejos
+  add column if not exists usuario_id uuid references auth.users (id) on delete cascade;
+
+-- Acelera a listagem "despejos da minha conta, mais recentes primeiro"
+create index if not exists despejos_usuario_criado_idx
+  on public.despejos (usuario_id, criado_em desc);
+
 -- Acelera a listagem "despejos deste navegador, mais recentes primeiro"
 create index if not exists despejos_dispositivo_criado_idx
   on public.despejos (dispositivo_id, criado_em desc);

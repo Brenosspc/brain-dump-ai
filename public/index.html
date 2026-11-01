@@ -17,9 +17,71 @@
 
     <!-- Cabeçalho -->
     <header class="mb-8">
-      <h1 class="text-2xl font-semibold tracking-tight text-slate-50 sm:text-3xl">Brain Dump AI</h1>
+      <div class="flex items-start justify-between gap-4">
+        <h1 class="text-2xl font-semibold tracking-tight text-slate-50 sm:text-3xl">Brain Dump AI</h1>
+
+        <!-- Conta: só aparece quando o servidor tem histórico na nuvem com login -->
+        <div id="conta" hidden class="shrink-0 pt-1 text-right text-sm">
+          <button
+            type="button"
+            id="botao-entrar"
+            aria-expanded="false"
+            aria-controls="form-login"
+            class="rounded-xl border border-slate-700 px-4 py-2 text-slate-200 hover:border-slate-600 hover:bg-slate-800"
+          >
+            Entrar
+          </button>
+          <div id="conta-logada" hidden class="flex flex-col items-end gap-1">
+            <span class="text-xs text-slate-500">Conectado como</span>
+            <span id="conta-email" class="max-w-[11rem] truncate text-slate-300 sm:max-w-[16rem]"></span>
+            <button
+              type="button"
+              id="botao-sair"
+              class="rounded px-1 text-xs text-slate-400 underline-offset-4 hover:text-slate-200 hover:underline"
+            >
+              Sair
+            </button>
+          </div>
+        </div>
+      </div>
       <p class="mt-2 text-slate-400">Despeje tudo o que está na sua cabeça, sem ordem. A gente organiza para você.</p>
     </header>
+
+    <!-- Login por link mágico (sem senha) -->
+    <form id="form-login" hidden novalidate aria-labelledby="titulo-login" class="mb-8 space-y-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+      <h2 id="titulo-login" class="text-base font-semibold text-slate-100">Entrar com seu e-mail</h2>
+      <p class="text-sm leading-relaxed text-slate-400">
+        Seus despejos ficam salvos na sua conta e você acessa de qualquer aparelho.
+        Enviamos um link de acesso para o seu e-mail: não precisa de senha.
+      </p>
+      <label for="email-login" class="block text-sm font-medium text-slate-300">E-mail</label>
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <input
+          id="email-login"
+          type="email"
+          autocomplete="email"
+          inputmode="email"
+          required
+          placeholder="voce@exemplo.com"
+          class="w-full flex-1 rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2.5 text-slate-100 placeholder:text-slate-500 focus:border-indigo-400/60"
+        />
+        <button
+          type="submit"
+          id="botao-enviar-link"
+          class="rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+        >
+          Enviar link
+        </button>
+      </div>
+      <p id="status-login" role="status" aria-live="polite" class="text-sm text-slate-400"></p>
+      <button
+        type="button"
+        id="botao-fechar-login"
+        class="rounded px-1 text-xs text-slate-500 underline-offset-4 hover:text-slate-300 hover:underline"
+      >
+        Fechar
+      </button>
+    </form>
 
     <!-- Entrada -->
     <form id="form-despejo" novalidate class="space-y-3">
