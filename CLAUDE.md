@@ -21,3 +21,4 @@ Abre em http://localhost:3000 (requer `.env` com `GEMINI_API_KEY`, ver `.env.exa
 - Respostas da IA sempre estruturadas via `responseSchema`.
 - Não adicionar dependências sem avisar.
 - UI em dark mode minimalista.
+- Cartão de apoio (CVV 188): ativado por `sugerir_apoio` da IA OU pela lista de expressões em `lib/apoio.js`. Ao mexer nisso, manter as duas camadas, o tom calmo e evitar falsos positivos com expressões idiomáticas ("vai me matar de rir").

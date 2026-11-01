@@ -4,7 +4,7 @@ import "dotenv/config";
 import { fileURLToPath } from "node:url";
 import { GoogleGenAI } from "@google/genai";
 import { criarApp } from "./lib/app.js";
-import { criarOrganizador } from "./lib/ia.js";
+import { criarOrganizador, criarGeradorMicroPassos } from "./lib/ia.js";
 import { criarPool, criarRepositorio, iniciarLimpezaPeriodica } from "./lib/db.js";
 
 // ---------------------------------------------------------------------------
@@ -39,13 +39,15 @@ if (!GEMINI_API_KEY) {
 // O cliente do Gemini vive apenas no servidor; a chave nunca vai para o frontend.
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-const organizar = criarOrganizador({
+const opcoesIa = {
   ai,
   modelo: MODELO,
   modeloReserva: MODELO_RESERVA,
   prazoTotalMs: PRAZO_TOTAL_IA_MS,
   timeoutPrincipalMs: TIMEOUT_PRINCIPAL_MS,
-});
+};
+const organizar = criarOrganizador(opcoesIa);
+const gerarMicroPassos = criarGeradorMicroPassos(opcoesIa);
 
 // ---------------------------------------------------------------------------
 // Banco de dados (opcional): sem DATABASE_URL, o histórico fica só no navegador.
@@ -71,7 +73,7 @@ if (process.env.DATABASE_URL) {
   }
 }
 
-const app = criarApp({ organizar, repositorio, trustProxy: process.env.TRUST_PROXY });
+const app = criarApp({ organizar, gerarMicroPassos, repositorio, trustProxy: process.env.TRUST_PROXY });
 
 // No Express 5, falhas ao abrir a porta (ex.: EADDRINUSE) chegam como argumento do callback.
 app.listen(PORT, (erro) => {

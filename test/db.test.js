@@ -55,7 +55,7 @@ describe("criarRepositorio", () => {
     const lista = await criarRepositorio(pool).listar(DISPOSITIVO, 5);
 
     assert.deepEqual(lista, [
-      { id: DESPEJO, data: "2026-11-01T12:00:00.000Z", texto: "oi", resultado: { tarefas: [] } },
+      { id: DESPEJO, data: "2026-11-01T12:00:00.000Z", texto: "oi", resultado: { tarefas: [] }, progresso: {} },
     ]);
     const [{ sql, params }] = pool.consultas;
     assert.match(sql, /where dispositivo_id = \$1/);
@@ -73,6 +73,19 @@ describe("criarRepositorio", () => {
     const { sql, params } = pool.consultas[0];
     assert.match(sql, /where id = \$1 and dispositivo_id = \$2/);
     assert.deepEqual(params, [DESPEJO, DISPOSITIVO]);
+  });
+
+  it("atualizarProgresso só altera despejos do próprio dispositivo", async () => {
+    const pool = criarPoolFalso([{ rows: [], rowCount: 1 }, { rows: [], rowCount: 0 }]);
+    const repo = criarRepositorio(pool);
+    const progresso = { concluidas: [0], micro_passos: {} };
+
+    assert.equal(await repo.atualizarProgresso(DISPOSITIVO, DESPEJO, progresso), true);
+    assert.equal(await repo.atualizarProgresso(DISPOSITIVO, DESPEJO, progresso), false);
+
+    const { sql, params } = pool.consultas[0];
+    assert.match(sql, /^update despejos set progresso = \$3::jsonb where id = \$1 and dispositivo_id = \$2$/);
+    assert.deepEqual(params, [DESPEJO, DISPOSITIVO, JSON.stringify(progresso)]);
   });
 
   it("apagarTodos filtra pelo dispositivo", async () => {

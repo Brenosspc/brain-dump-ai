@@ -11,6 +11,11 @@ create table if not exists public.despejos (
   resultado      jsonb not null
 );
 
+-- Progresso do checklist: { "concluidas": [índices], "micro_passos": { "<índice>": [passos] } }
+-- (adicionada depois da criação da tabela; "if not exists" mantém o script seguro para rodar de novo)
+alter table public.despejos
+  add column if not exists progresso jsonb not null default '{}'::jsonb;
+
 -- Acelera a listagem "despejos deste navegador, mais recentes primeiro"
 create index if not exists despejos_dispositivo_criado_idx
   on public.despejos (dispositivo_id, criado_em desc);

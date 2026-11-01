@@ -97,6 +97,28 @@
         Seus pensamentos, organizados
       </h2>
 
+      <!-- Apoio: aparece só quando o texto mostra sinais de sofrimento intenso -->
+      <aside id="apoio" hidden aria-labelledby="titulo-apoio" class="rounded-2xl border border-teal-400/25 bg-teal-500/[0.07] p-5 sm:p-6">
+        <h3 id="titulo-apoio" class="text-base font-semibold text-teal-100">Você não precisa passar por isso sem apoio 💙</h3>
+        <p class="mt-2 text-sm leading-relaxed text-slate-300">
+          Se as coisas estiverem pesadas demais, conversar com alguém pode ajudar. O <strong class="font-semibold text-slate-100">CVV</strong>
+          (Centro de Valorização da Vida) atende 24 horas por dia, de graça e com sigilo.
+        </p>
+        <ul class="mt-4 flex flex-col gap-2 sm:flex-row">
+          <li>
+            <a href="tel:188" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-teal-400/30 bg-teal-500/10 px-4 py-2.5 text-sm text-teal-100 hover:bg-teal-500/20 sm:w-auto">
+              <span aria-hidden="true">📞</span> Ligar para o 188
+            </a>
+          </li>
+          <li>
+            <a href="https://cvv.org.br" target="_blank" rel="noopener noreferrer" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-700 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-800 sm:w-auto">
+              <span aria-hidden="true">💬</span> Conversar pelo chat (cvv.org.br)
+            </a>
+          </li>
+        </ul>
+        <p class="mt-3 text-xs text-slate-400">Em uma emergência, ligue 192 (SAMU).</p>
+      </aside>
+
       <div class="rounded-2xl border border-indigo-400/20 bg-indigo-500/[0.07] p-5 sm:p-6">
         <p id="sintese" class="text-lg leading-relaxed text-slate-100 sm:text-xl"></p>
         <ul class="mt-4 flex flex-wrap gap-2" aria-label="Leitura geral">
@@ -162,6 +184,17 @@
         </button>
       </div>
     </details>
+
+    <!-- Rodapé: contato de apoio sempre disponível, de forma discreta -->
+    <footer class="mt-12 border-t border-slate-800/80 pt-6 text-center text-xs leading-relaxed text-slate-500">
+      <p>
+        Precisa conversar com alguém? O
+        <a href="https://cvv.org.br" target="_blank" rel="noopener noreferrer" class="text-slate-400 underline underline-offset-2 hover:text-slate-200">CVV</a>
+        atende 24 horas, de graça: ligue
+        <a href="tel:188" class="text-slate-400 underline underline-offset-2 hover:text-slate-200">188</a>.
+      </p>
+      <p class="mt-1">O Brain Dump AI organiza pensamentos e não substitui acompanhamento profissional.</p>
+    </footer>
   </main>
 </body>
 </html>
