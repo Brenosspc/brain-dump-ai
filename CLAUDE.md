@@ -23,4 +23,5 @@ Abre em http://localhost:3000 (requer `.env` com `GEMINI_API_KEY`, ver `.env.exa
 - Respostas da IA sempre estruturadas via `responseSchema`.
 - Não adicionar dependências sem avisar.
 - UI em dark mode minimalista.
+- Ajuda sob demanda (`POST /api/ajuda`, `AJUDAS` em app.js): "primeiro passo" para ideias e "perguntas para pensar" para dúvidas. Desabafos NUNCA recebem conselho; dúvidas só recebem perguntas (a IA não decide). Temas sensíveis (saúde/remédios, finanças, jurídico) recebem só a mensagem fixa `MENSAGEM_PROFISSIONAL`, em duas camadas: `tema_sensivel` da IA OU a lista de `lib/temas-sensiveis.js` (checada antes de chamar a IA)
 - Cartão de apoio (CVV 188): ativado por `sugerir_apoio` da IA OU pela lista de expressões em `lib/apoio.js`. Ao mexer nisso, manter as duas camadas, o tom calmo e evitar falsos positivos com expressões idiomáticas ("vai me matar de rir").

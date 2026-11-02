@@ -6,7 +6,10 @@ import {
   sanitizarResposta,
   sanitizarPassos,
   sanitizarProgresso,
+  sanitizarPrimeiroPasso,
+  sanitizarPerguntas,
   CATEGORIAS,
+  MAX_PERGUNTAS,
   MAX_PASSOS,
 } from "../lib/sanitizar.js";
 
@@ -122,9 +125,39 @@ describe("sanitizarProgresso", () => {
   });
 
   it("ignora campos extras e devolve null se não for objeto", () => {
-    assert.deepEqual(sanitizarProgresso({ extra: "x" }), { concluidas: [], micro_passos: {} });
+    assert.deepEqual(sanitizarProgresso({ extra: "x" }), {
+      concluidas: [],
+      micro_passos: {},
+      primeiros_passos: {},
+      perguntas: {},
+    });
     assert.equal(sanitizarProgresso(null), null);
     assert.equal(sanitizarProgresso([1, 2]), null);
     assert.equal(sanitizarProgresso("texto"), null);
+  });
+});
+
+describe("ajuda sob demanda", () => {
+  it("sanitizarPrimeiroPasso limpa espaços e devolve \"\" se não houver passo", () => {
+    assert.equal(sanitizarPrimeiroPasso({ passo: "  Separar   o tênis  " }), "Separar o tênis");
+    assert.equal(sanitizarPrimeiroPasso({ passo: 42 }), "");
+    assert.equal(sanitizarPrimeiroPasso(null), "");
+    assert.equal(sanitizarPrimeiroPasso({ passo: "x".repeat(500) }).length, 200);
+  });
+
+  it("sanitizarPerguntas mantém no máximo 3, sem vazias nem repetidas", () => {
+    const perguntas = sanitizarPerguntas({ perguntas: ["O que pesa mais?", "o que pesa mais", "", "A?", "B?", "C?"] });
+    assert.deepEqual(perguntas, ["O que pesa mais?", "A?", "B?"]);
+    assert.equal(MAX_PERGUNTAS, 3);
+    assert.deepEqual(sanitizarPerguntas({}), []);
+  });
+
+  it("sanitizarProgresso guarda primeiros passos e perguntas por índice", () => {
+    const progresso = sanitizarProgresso({
+      primeiros_passos: { 0: " Abrir o caderno ", 1: "", x: "?", 2: 5 },
+      perguntas: { "01": ["A?", "a?"], 3: "não é lista", 4: [] },
+    });
+    assert.deepEqual(progresso.primeiros_passos, { 0: "Abrir o caderno" });
+    assert.deepEqual(progresso.perguntas, { 1: ["A?"] });
   });
 });

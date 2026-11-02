@@ -562,7 +562,7 @@ describe("fase 3: apoio, micro-passos e progresso", () => {
       progresso: { concluidas: [2, 0, 0, -1], micro_passos: { 0: ["Abrir o app"], x: ["?"] }, extra: true },
     });
     assert.equal(resposta.status, 200);
-    const esperado = { concluidas: [0, 2], micro_passos: { 0: ["Abrir o app"] } };
+    const esperado = { concluidas: [0, 2], micro_passos: { 0: ["Abrir o app"] }, primeiros_passos: {}, perguntas: {} };
     assert.deepEqual((await resposta.json()).progresso, esperado);
     assert.deepEqual(progressosSalvos.get(`${USUARIO_ANA}:${DESPEJO}`), esperado);
   });
@@ -673,5 +673,118 @@ describe("limite de requisições", () => {
     const bloqueada = await organizarPost(servidor.base, { texto: "c" });
     assert.equal(bloqueada.status, 429);
     assert.ok(bloqueada.headers.get("retry-after"));
+  });
+});
+
+describe("ajuda sob demanda (/api/ajuda)", () => {
+  let servidor;
+  let respostaIa = '{"passo":"Abrir o caderno","tema_sensivel":false}';
+  const chamadas = [];
+
+  function pedirAjuda(corpo) {
+    return fetch(`${servidor.base}/api/ajuda`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(corpo),
+    });
+  }
+
+  before(async () => {
+    mock.method(console, "error", () => {});
+    servidor = await subir({
+      organizar: async () => RESPOSTA_IA,
+      gerarAjuda: async (tipo, texto) => {
+        chamadas.push({ tipo, texto });
+        if (respostaIa instanceof Error) throw respostaIa;
+        return respostaIa;
+      },
+      limite: { maximo: 1_000, janelaMs: 60_000 },
+    });
+  });
+
+  beforeEach(() => {
+    chamadas.length = 0;
+  });
+
+  after(async () => {
+    await servidor.fechar();
+    mock.restoreAll();
+  });
+
+  it("devolve o primeiro passo de uma ideia", async () => {
+    respostaIa = '{"passo":"  Abrir   o caderno ","tema_sensivel":false}';
+    const resposta = await pedirAjuda({ tipo: "primeiro_passo", texto: " Escrever  um livro " });
+    assert.equal(resposta.status, 200);
+    assert.deepEqual(await resposta.json(), { tipo: "primeiro_passo", primeiro_passo: "Abrir o caderno" });
+    assert.deepEqual(chamadas, [{ tipo: "primeiro_passo", texto: "Escrever um livro" }]);
+  });
+
+  it("devolve até 3 perguntas para uma dúvida", async () => {
+    respostaIa = JSON.stringify({ perguntas: ["A?", "B?", "C?", "D?"], tema_sensivel: false });
+    const dados = await (await pedirAjuda({ tipo: "perguntas", texto: "Mudo de emprego?" })).json();
+    assert.deepEqual(dados, { tipo: "perguntas", perguntas: ["A?", "B?", "C?"] });
+  });
+
+  it("recusa tipos inválidos, inclusive desabafos (400)", async () => {
+    for (const tipo of ["desabafo", "constructor", "__proto__", 1, undefined]) {
+      assert.equal((await pedirAjuda({ tipo, texto: "x" })).status, 400);
+    }
+    assert.equal(chamadas.length, 0);
+  });
+
+  it("recusa texto vazio (400) e longo demais (413)", async () => {
+    assert.equal((await pedirAjuda({ tipo: "perguntas", texto: "   " })).status, 400);
+    assert.equal((await pedirAjuda({ tipo: "perguntas", texto: "a".repeat(301) })).status, 413);
+    assert.equal(chamadas.length, 0);
+  });
+
+  it("em sinais de risco, devolve o apoio sem chamar a IA", async () => {
+    const dados = await (await pedirAjuda({ tipo: "perguntas", texto: "devo me matar?" })).json();
+    assert.deepEqual(dados, { tipo: "perguntas", sugerir_apoio: true });
+    assert.equal(chamadas.length, 0);
+  });
+
+  it("em temas sensíveis (lista), encaminha para um profissional sem chamar a IA", async () => {
+    const dados = await (await pedirAjuda({ tipo: "perguntas", texto: "Paro de tomar o remédio?" })).json();
+    assert.equal(dados.tipo, "perguntas");
+    assert.match(dados.encaminhar, /profissional/);
+    assert.equal(dados.perguntas, undefined);
+    assert.equal(chamadas.length, 0);
+  });
+
+  it("quando a IA marca tema_sensivel, encaminha e descarta a sugestão", async () => {
+    respostaIa = '{"passo":"Investir tudo em ações","tema_sensivel":true}';
+    const dados = await (await pedirAjuda({ tipo: "primeiro_passo", texto: "investir minhas economias" })).json();
+    assert.match(dados.encaminhar, /profissional/);
+    assert.equal(dados.primeiro_passo, undefined);
+  });
+
+  it("responde 502 quando a IA não traz nada útil", async () => {
+    for (const texto of ['{"passo":"","tema_sensivel":false}', "não é json"]) {
+      respostaIa = texto;
+      assert.equal((await pedirAjuda({ tipo: "primeiro_passo", texto: "ideia" })).status, 502);
+    }
+    respostaIa = '{"perguntas":[],"tema_sensivel":false}';
+    assert.equal((await pedirAjuda({ tipo: "perguntas", texto: "dúvida" })).status, 502);
+  });
+
+  it("traduz erros do Gemini", async () => {
+    const erro = new Error("indisponível");
+    erro.status = 503;
+    respostaIa = erro;
+    const resposta = await pedirAjuda({ tipo: "perguntas", texto: "dúvida" });
+    assert.ok(resposta.status >= 500);
+    assert.ok((await resposta.json()).erro);
+  });
+
+  it("responde 503 se o servidor não tiver o ajudante", async () => {
+    const semAjuda = await subir({ organizar: async () => RESPOSTA_IA });
+    const resposta = await fetch(`${semAjuda.base}/api/ajuda`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipo: "perguntas", texto: "x" }),
+    });
+    assert.equal(resposta.status, 503);
+    await semAjuda.fechar();
   });
 });

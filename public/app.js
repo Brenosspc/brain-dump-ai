@@ -82,6 +82,33 @@ const EXEMPLO = {
     ["Entrar no site do Detran do seu estado", "Ver a lista de documentos exigidos", "Agendar o exame médico", "Separar o comprovante de residência"],
     ["Colocar uma música animada", "Lavar só os copos primeiro", "Lavar pratos e talheres", "Deixar as panelas de molho"],
   ],
+  // Ajuda pronta: primeiro passo de cada ideia e perguntas de cada dúvida (mesma ordem do resultado).
+  primeiros_passos: ["Deixar o tênis e a roupa separados ao lado da cama hoje à noite"],
+  perguntas: [
+    [
+      "O que acontece de concreto se a apresentação atrasar um ou dois dias?",
+      "Com mais prazo, você conseguiria entregar algo de que se orgulha?",
+      "Como seu chefe costuma reagir quando alguém avisa com antecedência?",
+    ],
+  ],
+};
+
+// Ajuda sob demanda nos cartões de ideias e dúvidas (desabafos nunca recebem sugestão).
+const AJUDAS = {
+  ideias: {
+    tipo: "primeiro_passo",
+    campo: "primeiros_passos",
+    botao: "💡 Qual o primeiro passo?",
+    esperando: "Pensando no primeiro passo…",
+    erro: "Não consegui pensar num primeiro passo agora.",
+  },
+  duvidas: {
+    tipo: "perguntas",
+    campo: "perguntas",
+    botao: "❓ Me ajude a pensar",
+    esperando: "Pensando em perguntas…",
+    erro: "Não consegui pensar em perguntas agora.",
+  },
 };
 
 const CAMPOS_TEXTO = ["sintese_acolhedora", "nivel_carga_cognitiva", "estado_mental"];
@@ -152,7 +179,7 @@ const estado = {
   // Despejo na tela: { id, naNuvem } e o progresso do checklist
   despejoAtual: null,
   modoExemplo: false, // o resultado na tela é o exemplo pronto (nada é salvo nem enviado à IA)
-  progresso: { concluidas: [], micro_passos: {} },
+  progresso: progressoVazio(),
   timersProgresso: new Map(), // id do despejo -> timer do envio do progresso à nuvem
   // Conta e histórico
   nuvemDisponivel: false, // o servidor oferece histórico na nuvem (banco + login)
@@ -306,12 +333,33 @@ function validarResultado(dados) {
 }
 
 function progressoVazio() {
-  return { concluidas: [], micro_passos: {} };
+  return { concluidas: [], micro_passos: {}, primeiros_passos: {}, perguntas: {} };
+}
+
+/** Lista de textos limpa: só strings não vazias, cortadas em 200 caracteres, no máximo `maximo`. */
+function limparTextos(lista, maximo) {
+  if (!Array.isArray(lista)) return [];
+  return lista
+    .filter((item) => typeof item === "string" && item.trim())
+    .map((item) => item.trim().slice(0, 200))
+    .slice(0, maximo);
+}
+
+/** Copia um objeto { "<índice>": valor } mantendo só índices válidos com valor aproveitável. */
+function copiarPorIndice(origem, limpar) {
+  const resultado = {};
+  if (!origem || typeof origem !== "object" || Array.isArray(origem)) return resultado;
+  for (const [chave, valor] of Object.entries(origem)) {
+    if (!/^\d{1,2}$/.test(chave)) continue;
+    const limpo = limpar(valor);
+    if (limpo.length > 0) resultado[String(Number(chave))] = limpo;
+  }
+  return resultado;
 }
 
 /**
- * Valida o progresso de um despejo (tarefas concluídas e micro-passos), no mesmo formato
- * aceito pelo servidor. Devolve sempre um objeto válido (vazio se a entrada for inválida).
+ * Valida o progresso de um despejo (tarefas concluídas, micro-passos, primeiros passos e
+ * perguntas), no mesmo formato aceito pelo servidor. Devolve sempre um objeto válido.
  */
 function validarProgresso(dados) {
   const progresso = progressoVazio();
@@ -322,17 +370,11 @@ function validarProgresso(dados) {
     progresso.concluidas = [...new Set(indices)].sort((a, b) => a - b);
   }
 
-  const origem = dados.micro_passos;
-  if (origem && typeof origem === "object" && !Array.isArray(origem)) {
-    for (const [chave, passos] of Object.entries(origem)) {
-      if (!/^\d{1,2}$/.test(chave) || !Array.isArray(passos)) continue;
-      const limpos = passos
-        .filter((passo) => typeof passo === "string" && passo.trim())
-        .map((passo) => passo.trim().slice(0, 200))
-        .slice(0, 6);
-      if (limpos.length > 0) progresso.micro_passos[String(Number(chave))] = limpos;
-    }
-  }
+  progresso.micro_passos = copiarPorIndice(dados.micro_passos, (passos) => limparTextos(passos, 6));
+  progresso.primeiros_passos = copiarPorIndice(dados.primeiros_passos, (passo) =>
+    typeof passo === "string" ? passo.trim().slice(0, 200) : ""
+  );
+  progresso.perguntas = copiarPorIndice(dados.perguntas, (perguntas) => limparTextos(perguntas, 3));
   return progresso;
 }
 
@@ -499,16 +541,176 @@ function criarCartao(categoria, itens) {
   const { secao, contagem } = criarMolduraCartao(categoria);
   contagem.textContent = `${itens.length} ${plural(itens.length, "item", "itens")}`;
 
+  const ajuda = AJUDAS[categoria.chave];
   const lista = document.createElement("ul");
   lista.className = `mt-3 list-disc space-y-2 pl-5 leading-relaxed text-slate-300 ${categoria.marcador}`;
-  for (const item of itens) {
+  itens.forEach((item, indice) => {
     const li = document.createElement("li");
-    li.textContent = item;
+    const texto = document.createElement("span");
+    texto.textContent = item;
+    li.append(texto);
+    if (ajuda) {
+      const area = document.createElement("div");
+      renderizarAreaAjuda(area, ajuda, item, indice);
+      li.append(area);
+    }
     lista.append(li);
-  }
+  });
 
   secao.append(lista);
+  if (categoria.chave === "duvidas") {
+    const aviso = document.createElement("p");
+    aviso.className = "mt-4 text-xs leading-relaxed text-slate-500";
+    aviso.textContent = "Perguntas para te ajudar a pensar, não são orientação profissional.";
+    secao.append(aviso);
+  }
   return secao;
+}
+
+// ---------------------------------------------------------------------------
+// Ajuda sob demanda: "primeiro passo" (ideias) e "me ajude a pensar" (dúvidas)
+// ---------------------------------------------------------------------------
+
+/** Mostra a ajuda já salva para o item ou, se ainda não existir, o botão para pedi-la. */
+function renderizarAreaAjuda(area, ajuda, item, indice) {
+  const salvo = estado.progresso[ajuda.campo][String(indice)];
+
+  if (ajuda.tipo === "primeiro_passo" && salvo) {
+    const passo = document.createElement("p");
+    passo.className = "mt-1.5 rounded-lg bg-amber-500/10 px-3 py-2 text-sm leading-relaxed text-amber-100/90";
+    const rotulo = document.createElement("span");
+    rotulo.className = "font-semibold text-amber-200";
+    rotulo.textContent = "Primeiro passo: ";
+    passo.append(rotulo, document.createTextNode(salvo));
+    area.replaceChildren(passo);
+    return;
+  }
+
+  if (ajuda.tipo === "perguntas" && salvo?.length) {
+    const lista = document.createElement("ul");
+    lista.className = "mt-1.5 space-y-1 rounded-lg bg-violet-500/10 px-3 py-2 text-sm leading-relaxed text-violet-100/90";
+    lista.setAttribute("aria-label", `Perguntas para pensar sobre: ${item}`);
+    for (const pergunta of salvo) {
+      const li = document.createElement("li");
+      li.className = "list-none";
+      li.textContent = `🤔 ${pergunta}`;
+      lista.append(li);
+    }
+    area.replaceChildren(lista);
+    return;
+  }
+
+  const botao = document.createElement("button");
+  botao.type = "button";
+  botao.className =
+    "mt-1 rounded px-0.5 text-xs text-sky-300/80 underline-offset-4 hover:text-sky-200 hover:underline disabled:cursor-wait disabled:opacity-60";
+  botao.textContent = ajuda.botao;
+  botao.setAttribute("aria-label", `${ajuda.botao.replace(/^\S+\s/, "")} ${item}`);
+  botao.addEventListener("click", () => pedirAjuda(ajuda, item, indice, area, botao));
+  area.replaceChildren(botao);
+}
+
+/** Mensagem fixa (tema sensível): aparece só na tela, não é salva no progresso. */
+function mostrarEncaminhamento(area, mensagem) {
+  const aviso = document.createElement("p");
+  aviso.className = "mt-1.5 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm leading-relaxed text-slate-300";
+  aviso.textContent = `🩺 ${mensagem}`;
+  area.replaceChildren(aviso);
+}
+
+async function chamarAjuda(tipo, texto) {
+  const controle = new AbortController();
+  const timer = setTimeout(() => controle.abort(), TIMEOUT_REQUISICAO_MS);
+
+  let resposta;
+  try {
+    resposta = await fetch("/api/ajuda", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipo, texto }),
+      signal: controle.signal,
+    });
+  } catch (erro) {
+    if (erro?.name === "AbortError") throw new ErroAmigavel("A IA demorou demais para responder. Tente de novo.");
+    throw new ErroAmigavel("Não consegui falar com o servidor. Verifique sua conexão e tente novamente.");
+  } finally {
+    clearTimeout(timer);
+  }
+
+  let dados = null;
+  try {
+    dados = await resposta.json();
+  } catch {
+    // Corpo vazio ou não-JSON: tratado abaixo.
+  }
+
+  if (!resposta.ok) {
+    throw new ErroAmigavel(
+      typeof dados?.erro === "string" && dados.erro.trim() ? dados.erro.trim() : "Não consegui ajudar agora. Tente de novo."
+    );
+  }
+  if (!dados || typeof dados !== "object") {
+    throw new ErroAmigavel("A resposta veio num formato inesperado. Tente de novo.");
+  }
+  return dados;
+}
+
+/** No exemplo pronto, a ajuda já vem pronta (uma pausa curta imita o tempo da IA). */
+async function ajudaDoExemplo(ajuda, indice) {
+  await new Promise((resolver) => setTimeout(resolver, reduzMovimento() ? 0 : 900));
+  const pronta = EXEMPLO[ajuda.campo]?.[indice];
+  if (!pronta) throw new ErroAmigavel("Não há uma sugestão pronta para esse item no exemplo.");
+  return ajuda.tipo === "primeiro_passo" ? { primeiro_passo: pronta } : { perguntas: pronta };
+}
+
+async function pedirAjuda(ajuda, item, indice, area, botao) {
+  if (botao.disabled) return;
+  botao.disabled = true;
+  botao.setAttribute("aria-busy", "true");
+  botao.textContent = ajuda.esperando;
+  limparMensagens();
+
+  const despejoAlvo = estado.despejoAtual?.id;
+  try {
+    const dados = estado.modoExemplo ? await ajudaDoExemplo(ajuda, indice) : await chamarAjuda(ajuda.tipo, item);
+    // A pessoa pode ter aberto outro despejo enquanto esperava.
+    if (estado.despejoAtual?.id !== despejoAlvo || !area.isConnected) return;
+
+    if (dados.sugerir_apoio === true) {
+      // Sinal de sofrimento: em vez de sugestão, o cartão de apoio (CVV).
+      renderizarAreaAjuda(area, ajuda, item, indice);
+      el.apoio.hidden = false;
+      el.apoio.scrollIntoView({ behavior: reduzMovimento() ? "auto" : "smooth", block: "center" });
+      mostrarStatus("Em vez de uma sugestão, deixei um contato de apoio no topo do resultado.");
+      return;
+    }
+    if (typeof dados.encaminhar === "string" && dados.encaminhar.trim()) {
+      mostrarEncaminhamento(area, dados.encaminhar.trim());
+      mostrarStatus("Esse assunto merece a conversa com um profissional.");
+      return;
+    }
+
+    if (ajuda.tipo === "primeiro_passo") {
+      const passo = typeof dados.primeiro_passo === "string" ? dados.primeiro_passo.trim().slice(0, 200) : "";
+      if (!passo) throw new ErroAmigavel("A resposta veio num formato inesperado. Tente de novo.");
+      estado.progresso.primeiros_passos[String(indice)] = passo;
+      mostrarStatus(`Primeiro passo: ${passo}`);
+    } else {
+      const perguntas = limparTextos(dados.perguntas, 3);
+      if (perguntas.length === 0) throw new ErroAmigavel("A resposta veio num formato inesperado. Tente de novo.");
+      estado.progresso.perguntas[String(indice)] = perguntas;
+      mostrarStatus(`Pronto: ${perguntas.length} perguntas para te ajudar a pensar.`);
+    }
+    renderizarAreaAjuda(area, ajuda, item, indice);
+    salvarProgresso();
+  } catch (erro) {
+    if (!area.isConnected) return;
+    botao.disabled = false;
+    botao.removeAttribute("aria-busy");
+    botao.textContent = ajuda.botao;
+    if (!(erro instanceof ErroAmigavel)) console.error("[Ajuda] Erro inesperado:", erro);
+    mostrarErro(erro instanceof ErroAmigavel ? erro.message : ajuda.erro);
+  }
 }
 
 /**
@@ -805,6 +1007,8 @@ function salvarProgresso() {
   const progresso = {
     concluidas: [...estado.progresso.concluidas],
     micro_passos: { ...estado.progresso.micro_passos },
+    primeiros_passos: { ...estado.progresso.primeiros_passos },
+    perguntas: { ...estado.progresso.perguntas },
   };
 
   // Mantém o painel de histórico em dia (para "Reabrir" mostrar o progresso atual).

@@ -4,7 +4,7 @@ import "dotenv/config";
 import { fileURLToPath } from "node:url";
 import { GoogleGenAI } from "@google/genai";
 import { criarApp } from "./lib/app.js";
-import { criarOrganizador, criarGeradorMicroPassos } from "./lib/ia.js";
+import { criarOrganizador, criarGeradorMicroPassos, criarAjudante } from "./lib/ia.js";
 import { criarPool, criarRepositorio, iniciarLimpezaPeriodica } from "./lib/db.js";
 import { criarVerificadorAuth } from "./lib/auth.js";
 
@@ -49,6 +49,7 @@ const opcoesIa = {
 };
 const organizar = criarOrganizador(opcoesIa);
 const gerarMicroPassos = criarGeradorMicroPassos(opcoesIa);
+const gerarAjuda = criarAjudante(opcoesIa);
 
 // ---------------------------------------------------------------------------
 // Banco de dados (opcional): sem DATABASE_URL, o histórico fica só no navegador.
@@ -102,6 +103,7 @@ if (repositorio && !verificarUsuario) {
 const app = criarApp({
   organizar,
   gerarMicroPassos,
+  gerarAjuda,
   repositorio,
   verificarUsuario,
   configAuth,
