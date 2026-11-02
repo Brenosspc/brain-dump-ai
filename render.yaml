@@ -16,9 +16,10 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      # O Render fica atrás de um proxy: necessário para o limitador ver o IP real.
+      # Cadeia no Render: usuário -> Cloudflare -> balanceador do Render -> app (2 proxies).
+      # Com "1", o limitador via o IP do Cloudflare (muda a cada pedido) e não limitava ninguém.
       - key: TRUST_PROXY
-        value: "1"
+        value: "2"
       - key: GEMINI_API_KEY
         sync: false
       - key: DATABASE_URL

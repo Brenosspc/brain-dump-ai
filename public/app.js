@@ -21,7 +21,10 @@ const ATRASO_SALVAR_PROGRESSO_MS = 700;
 const PADRAO_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PADRAO_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Biblioteca oficial do Supabase (login), com versão fixa e carregada só quando o login existe.
-const SUPABASE_JS_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm";
+// O hash (SRI) garante que o navegador só executa exatamente este arquivo: se o CDN mudar
+// uma vírgula, o script é recusado. A mesma URL está liberada na CSP (lib/seguranca.js).
+const SUPABASE_JS_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js";
+const SUPABASE_JS_SRI = "sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R";
 
 // Cada categoria tem uma cor própria: borda de destaque, selo do ícone e marcador da lista.
 const CATEGORIAS = [
@@ -1803,6 +1806,24 @@ function lerErroDoLink() {
     : "Não consegui concluir o login com esse link. Peça um novo em “Entrar”.";
 }
 
+/** Carrega o script do Supabase com verificação de integridade (SRI) e devolve window.supabase. */
+function carregarSupabase() {
+  return new Promise((resolver, rejeitar) => {
+    const script = document.createElement("script");
+    script.src = SUPABASE_JS_URL;
+    script.integrity = SUPABASE_JS_SRI;
+    script.crossOrigin = "anonymous";
+    script.referrerPolicy = "no-referrer";
+    script.addEventListener("load", () =>
+      typeof window.supabase?.createClient === "function"
+        ? resolver(window.supabase)
+        : rejeitar(new Error("A biblioteca de login carregou num formato inesperado."))
+    );
+    script.addEventListener("error", () => rejeitar(new Error("Falha ao carregar (rede ou integridade).")));
+    document.head.append(script);
+  });
+}
+
 /** Carrega a biblioteca do Supabase e passa a acompanhar a sessão. */
 async function iniciarLogin() {
   const veioDoLink = /access_token=/.test(window.location.hash);
@@ -1810,7 +1831,7 @@ async function iniciarLogin() {
 
   let createClient;
   try {
-    ({ createClient } = await import(SUPABASE_JS_URL));
+    ({ createClient } = await carregarSupabase());
   } catch (erro) {
     console.warn("[Login] Não consegui carregar a biblioteca de login:", erro);
     estado.nuvemDisponivel = false;

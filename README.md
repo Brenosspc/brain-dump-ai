@@ -141,7 +141,8 @@ Como no cartão de apoio, a proteção tem **duas camadas**: a IA marca `tema_se
 - **Dependências enxutas.** O backend usa só `express`, `@google/genai`, `pg` e `dotenv`. O frontend é JavaScript puro; o único build é o do Tailwind, que gera um CSS de ~17 KB só com as classes usadas (o arquivo gerado fica no repositório, então o app roda sem build).
 - **Design com propósito.** A fonte Lexend foi criada para facilitar a leitura; o loader de respiração troca a espera ansiosa por uma pausa; cada categoria tem uma cor fixa para o olho achar rápido o que procura. Todas as animações são desligadas para quem prefere menos movimento.
 - **Exemplo sem gastar cota.** O "Ver um exemplo pronto" usa um resultado (e micro-passos) embutidos no frontend: quem visita vê o app inteiro funcionando sem consumir a cota diária do Gemini.
-- **Injeção de dependências para testar.** `criarApp` recebe a IA, o banco e o login por parâmetro, então os 155 testes rodam com versões falsas, **sem gastar cota nem precisar de banco**.
+- **Segurança testada, não só configurada.** Testes conferem os cabeçalhos em todas as rotas, que o HTML não tem script ou estilo inline (que a CSP bloquearia) e que forjar o `X-Forwarded-For` não escapa do limitador.
+- **Injeção de dependências para testar.** `criarApp` recebe a IA, o banco e o login por parâmetro, então os 168 testes rodam com versões falsas, **sem gastar cota nem precisar de banco**.
 
 ## 🚀 Como rodar
 
@@ -219,7 +220,7 @@ O histórico na nuvem só é usado por quem entra com a conta. Para ativar:
 | `SUPABASE_URL` | Não | URL do projeto Supabase, para o login. Sem ela (ou sem a chave abaixo), o histórico fica só no navegador. |
 | `SUPABASE_ANON_KEY` | Não | Chave anon/publishable do Supabase. É pública por natureza: o navegador a usa para fazer login. |
 | `PORT` | Não | Porta do servidor (padrão: `3000`). |
-| `TRUST_PROXY` | Não | Use `1` ao hospedar atrás de um proxy (Render, Railway etc.) para o limitador identificar o IP real. |
+| `TRUST_PROXY` | Não | Número de proxies na frente do app, para o limitador identificar o IP real. No Render são `2` (Cloudflare + balanceador); com um proxy só, `1`. Um número maior que o real deixa o IP ser forjado. |
 
 </details>
 
@@ -337,6 +338,9 @@ Exceto `/api/status`, todas exigem login (`Authorization: Bearer <token>`), e ca
 - O texto do usuário é delimitado no prompt e a IA é instruída a **ignorar comandos embutidos** (proteção contra *prompt injection*).
 - A resposta da IA é **validada e sanitizada** no servidor e no navegador.
 - Todo conteúdo da IA e do histórico é renderizado com `textContent`, **nunca `innerHTML`** (proteção contra XSS).
+- **Cabeçalhos de segurança** em todas as respostas (`lib/seguranca.js`, sem dependência): uma **Content-Security-Policy** que só libera o próprio site, as fontes do Google, o script fixo do Supabase e a API do Supabase (nada de script inline nem `eval`), além de `X-Frame-Options: DENY` (contra clickjacking), `nosniff`, `Referrer-Policy`, HSTS e `Permissions-Policy` (só o microfone, para o ditado). O cabeçalho `X-Powered-By` é desligado.
+- A biblioteca de login vem do CDN com **verificação de integridade (SRI)**: se o arquivo mudar, o navegador se recusa a executá-lo.
+- Os **logs nunca guardam o texto** do usuário nem a resposta da IA, só o tamanho.
 - **Sem login**, nada é salvo no servidor: o histórico fica só no navegador.
 - **Com login**, a conexão com o banco usa TLS com verificação de certificado, todas as consultas são parametrizadas, cada conta só lê, altera e apaga os próprios despejos, e eles são apagados automaticamente depois de 30 dias. O RLS do Supabase fica ligado para bloquear a API pública.
 - Ao sair da conta, a cópia do histórico guardada no navegador é apagada.
