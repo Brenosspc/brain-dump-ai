@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import {
   criarOrganizador,
   criarGeradorMicroPassos,
+  criarAjudante,
+  TIPOS_AJUDA,
   ehCotaDiaria,
   traduzirErroGemini,
   RESPONSE_SCHEMA,
@@ -188,6 +190,40 @@ describe("criarGeradorMicroPassos", () => {
       ai.chamadas.map((c) => c.model),
       ["principal", "reserva"]
     );
+  });
+});
+
+describe("criarAjudante", () => {
+  it("envia a ideia delimitada, com o prompt e o schema do primeiro passo", async () => {
+    const ai = criarAiFalsa(['{"passo":"Abrir o caderno","tema_sensivel":false}']);
+    const ajudar = criarAjudante({ ai, modelo: "principal", modeloReserva: "reserva" });
+    await ajudar("primeiro_passo", "Escrever um livro");
+    const [{ contents, config }] = ai.chamadas;
+    assert.equal(contents, "<ideia>\nEscrever um livro\n</ideia>");
+    assert.equal(config.systemInstruction, TIPOS_AJUDA.primeiro_passo.prompt);
+    assert.equal(config.responseSchema, TIPOS_AJUDA.primeiro_passo.schema);
+  });
+
+  it("envia a dúvida delimitada, com o schema das perguntas", async () => {
+    const ai = criarAiFalsa(['{"perguntas":["A?"],"tema_sensivel":false}']);
+    const ajudar = criarAjudante({ ai, modelo: "principal", modeloReserva: "reserva" });
+    await ajudar("perguntas", "Mudo de emprego?");
+    const [{ contents, config }] = ai.chamadas;
+    assert.equal(contents, "<duvida>\nMudo de emprego?\n</duvida>");
+    assert.equal(config.responseSchema, TIPOS_AJUDA.perguntas.schema);
+    assert.equal(config.responseSchema.properties.perguntas.maxItems, 3);
+  });
+
+  it("os prompts proíbem decidir pela pessoa e marcam temas sensíveis", () => {
+    for (const { prompt, schema } of Object.values(TIPOS_AJUDA)) {
+      assert.match(prompt, /tema_sensivel/);
+      assert.ok(schema.required.includes("tema_sensivel"));
+    }
+  });
+
+  it("recusa um tipo desconhecido (não há ajuda para desabafos)", () => {
+    const ajudar = criarAjudante({ ai: criarAiFalsa([]), modelo: "p", modeloReserva: "r" });
+    assert.throws(() => ajudar("desabafo", "x"), /desconhecido/);
   });
 });
 

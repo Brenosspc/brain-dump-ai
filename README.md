@@ -30,6 +30,7 @@ Um app de *brain dump* pensado para pessoas com **TDAH e ansiedade**: você escr
 - [Funcionalidades](#-funcionalidades)
 - [Capturas de tela](#-capturas-de-tela)
 - [Como funciona](#-como-funciona)
+- [Onde a IA não entra (e por quê)](#-onde-a-ia-não-entra-e-por-quê)
 - [Decisões técnicas](#-decisões-técnicas)
 - [Como rodar](#-como-rodar)
 - [API](#-api)
@@ -56,6 +57,8 @@ O Brain Dump AI inverte a ordem: **primeiro você esvazia a cabeça, do jeito qu
 | 🪶 **"Sua mente está X% mais leve"** | Métrica motivacional (não clínica) baseada no que foi organizado. |
 | ✅ **Checklist de tarefas** | Marque o que já fez, com uma pequena comemoração e uma barra de progresso; tudo fica salvo no histórico. |
 | 🪜 **Quebrar em passos menores** | A IA divide uma tarefa difícil em 3 a 5 passos, começando por um bem fácil. |
+| 💡 **Qual o primeiro passo?** | Em cada ideia, a IA sugere uma ação pequena (menos de 15 minutos) para tirá-la do papel. |
+| ❓ **Me ajude a pensar** | Em cada dúvida, 2 ou 3 perguntas que ajudam você a decidir. A IA **não responde nem decide por você**. |
 | 💙 **Apoio quando precisa** | Se o texto mostra sofrimento intenso, aparece com delicadeza o contato do **CVV (188)**. |
 | 📋 **Copiar só as tarefas** | Uma por linha, prontas para colar no seu app de lista. |
 | 🔐 **Login sem senha** | Link mágico por e-mail para guardar o histórico na nuvem e abrir em outros aparelhos. Sem login, tudo fica só no navegador. |
@@ -81,6 +84,12 @@ O Brain Dump AI inverte a ordem: **primeiro você esvazia a cabeça, do jeito qu
   <tr>
     <td align="center"><sub>Resultado com cores por categoria e tarefa quebrada em passos menores</sub></td>
     <td align="center"><sub>Layout responsivo no celular</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/ajuda.png" alt="Cartão de ideias com o primeiro passo sugerido e cartão de dúvidas com três perguntas para ajudar a pensar" width="640"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><sub>Primeiro passo para uma ideia e perguntas para pensar sobre uma dúvida</sub></td>
   </tr>
   <tr>
     <td colspan="2" align="center"><img src="docs/respiracao.png" alt="Círculo de respiração com o texto Inspire, exibido enquanto a IA organiza" width="560"></td>
@@ -110,6 +119,19 @@ flowchart LR
 3. A resposta é **sanitizada** (só campos esperados, sem vazios nem repetidos) e passa por uma **rede de segurança** que procura expressões explícitas de risco para mostrar o cartão de apoio.
 4. Com login, o despejo é salvo na conta; sem login, fica só no navegador.
 
+## 🛑 Onde a IA não entra (e por quê)
+
+Um app para quem vive com TDAH ou ansiedade precisa saber onde **parar**. A ajuda da IA é pequena, sob demanda (só quando você clica) e tem limites claros:
+
+| Situação | O que o app faz |
+| --- | --- |
+| 🧘 **Desabafos** | Só acolhimento. **Nenhum conselho**: desabafo não é um problema para resolver. |
+| ❓ **Dúvidas** | Só perguntas para você pensar. A IA não responde, não opina e não decide. |
+| 🩺 **Saúde, remédios, finanças, questões jurídicas** | Nenhuma sugestão: aparece uma mensagem fixa indicando um profissional (médico, psicólogo, contador ou advogado). |
+| 💙 **Sinais de sofrimento intenso** | Em vez de sugestão, o contato do **CVV (188)**. |
+
+Como no cartão de apoio, a proteção tem **duas camadas**: a IA marca `tema_sensivel`, e o servidor confere uma lista de expressões (remédios, doses, tratamento, diagnóstico) **antes** de chamar a IA. Assim, mesmo que o modelo deixe passar, ninguém recebe sugestão sobre parar um remédio. A mensagem de encaminhamento é sempre o texto fixo do servidor, nunca um texto gerado.
+
 ## 🧩 Decisões técnicas
 
 - **Saída estruturada, não texto livre.** Todas as respostas da IA usam `responseSchema`, então o frontend nunca precisa "adivinhar" o formato.
@@ -119,7 +141,7 @@ flowchart LR
 - **Dependências enxutas.** O backend usa só `express`, `@google/genai`, `pg` e `dotenv`. O frontend é JavaScript puro; o único build é o do Tailwind, que gera um CSS de ~17 KB só com as classes usadas (o arquivo gerado fica no repositório, então o app roda sem build).
 - **Design com propósito.** A fonte Lexend foi criada para facilitar a leitura; o loader de respiração troca a espera ansiosa por uma pausa; cada categoria tem uma cor fixa para o olho achar rápido o que procura. Todas as animações são desligadas para quem prefere menos movimento.
 - **Exemplo sem gastar cota.** O "Ver um exemplo pronto" usa um resultado (e micro-passos) embutidos no frontend: quem visita vê o app inteiro funcionando sem consumir a cota diária do Gemini.
-- **Injeção de dependências para testar.** `criarApp` recebe a IA, o banco e o login por parâmetro, então os 125 testes rodam com versões falsas, **sem gastar cota nem precisar de banco**.
+- **Injeção de dependências para testar.** `criarApp` recebe a IA, o banco e o login por parâmetro, então os 155 testes rodam com versões falsas, **sem gastar cota nem precisar de banco**.
 
 ## 🚀 Como rodar
 
@@ -262,6 +284,24 @@ Requisição `{ "tarefa": "Declarar o imposto de renda" }` (até 300 caracteres)
 </details>
 
 <details>
+<summary><b><code>POST /api/ajuda</code></b>: primeiro passo de uma ideia ou perguntas sobre uma dúvida</summary>
+
+<br>
+
+Requisição `{ "tipo": "primeiro_passo" | "perguntas", "texto": "..." }` (até 300 caracteres). Não existe ajuda para desabafos. Respostas possíveis:
+
+| Resposta | Quando |
+| --- | --- |
+| `{ "tipo": "primeiro_passo", "primeiro_passo": "Separar o tênis ao lado da cama" }` | Ideia comum |
+| `{ "tipo": "perguntas", "perguntas": ["...?", "...?"] }` | Dúvida comum (até 3 perguntas) |
+| `{ "tipo": "...", "encaminhar": "Esse assunto merece a conversa com um profissional..." }` | Tema sensível (lista do servidor ou `tema_sensivel` da IA) |
+| `{ "tipo": "...", "sugerir_apoio": true }` | Sinais de sofrimento intenso (a IA nem é chamada) |
+
+Usa o mesmo limite de requisições da organização.
+
+</details>
+
+<details>
 <summary><b>Histórico na nuvem</b>: rotas que exigem login</summary>
 
 <br>
@@ -273,7 +313,7 @@ Exceto `/api/status`, todas exigem login (`Authorization: Bearer <token>`), e ca
 | `GET /api/status` | `{ "nuvem": true, "dias_retencao": 30, "auth": { "url": "...", "chave_publica": "..." } }`: informa se o histórico na nuvem e o login estão ativos |
 | `POST /api/despejos/importar` | Leva para a conta até 10 despejos do navegador (`{ "despejos": [...] }`) e os que o navegador (`X-Dispositivo-Id`) salvou antes do login. Responde `{ "importados", "vinculados", "ignorados" }` |
 | `GET /api/despejos?limite=5` | Lista os despejos mais recentes (`{ "despejos": [...] }`) |
-| `PATCH /api/despejos/:id` | Salva o progresso: `{ "progresso": { "concluidas": [0, 2], "micro_passos": { "0": ["..."] } } }` |
+| `PATCH /api/despejos/:id` | Salva o progresso: `{ "progresso": { "concluidas": [0, 2], "micro_passos": { "0": ["..."] }, "primeiros_passos": { "0": "..." }, "perguntas": { "0": ["...?"] } } }` |
 | `DELETE /api/despejos/:id` | Apaga um despejo (204, ou 404 se não existir) |
 | `DELETE /api/despejos` | Apaga todo o histórico da conta (204) |
 
@@ -315,6 +355,7 @@ brain-dump-ai/
 │   ├── auth.js         # Verificação do login (token do Supabase Auth)
 │   ├── db.js           # Acesso ao banco (Postgres): salvar, listar, apagar, importar, limpeza
 │   ├── apoio.js        # Rede de segurança do cartão de apoio (CVV)
+│   ├── temas-sensiveis.js # Temas em que a IA não dá sugestão (saúde, remédios...)
 │   ├── limitador.js    # Limite de requisições por IP (em memória)
 │   └── sanitizar.js    # Limpeza e validação da resposta da IA
 ├── public/
@@ -353,6 +394,7 @@ brain-dump-ai/
 - [x] Deploy público ([Render](https://brain-dump-ai-tomp.onrender.com))
 - [ ] SMTP próprio para o link mágico
 - [x] Modo demonstração (exemplo pronto), sem gastar cota da IA
+- [x] Primeiro passo para ideias e perguntas para dúvidas, com limites claros para a IA
 
 ## 👤 Autor
 
